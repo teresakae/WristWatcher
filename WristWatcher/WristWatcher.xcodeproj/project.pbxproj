@@ -18,6 +18,13 @@
 			remoteGlobalIDString = 136AB8B53059103700476989;
 			remoteInfo = "WristWatcher Watch App";
 		};
+		72D88BBAD3FE8CD0FCA1490F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 136AB8A13059103500476989 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 136AB8B53059103700476989;
+			remoteInfo = "WristWatcher Watch App";
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -35,9 +42,20 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		06413B2CA9003FB8C1F0FDC1 /* WristWatcher Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "WristWatcher Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		136AB8A93059103600476989 /* WristWatcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WristWatcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		136AB8B63059103700476989 /* WristWatcher Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "WristWatcher Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		469FC7FE9EC9C4E3DBB199EA /* Exceptions for "WristWatcher Watch App" folder in "WristWatcher Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"InfoPlist-Supplement.plist",
+			);
+			target = 136AB8B53059103700476989 /* WristWatcher Watch App */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		136AB8AB3059103600476989 /* WristWatcher */ = {
@@ -47,12 +65,27 @@
 		};
 		136AB8BA3059103700476989 /* WristWatcher Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				469FC7FE9EC9C4E3DBB199EA /* Exceptions for "WristWatcher Watch App" folder in "WristWatcher Watch App" target */,
+			);
 			path = "WristWatcher Watch App";
+			sourceTree = "<group>";
+		};
+		345A7B4A59AF58FA231F2DCC /* WristWatcher Watch AppTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "WristWatcher Watch AppTests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		0037812F6A08588013CEA5DD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		136AB8A63059103600476989 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -75,6 +108,7 @@
 			children = (
 				136AB8AB3059103600476989 /* WristWatcher */,
 				136AB8BA3059103700476989 /* WristWatcher Watch App */,
+				345A7B4A59AF58FA231F2DCC /* WristWatcher Watch AppTests */,
 				136AB8AA3059103600476989 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,6 +118,7 @@
 			children = (
 				136AB8A93059103600476989 /* WristWatcher.app */,
 				136AB8B63059103700476989 /* WristWatcher Watch App.app */,
+				06413B2CA9003FB8C1F0FDC1 /* WristWatcher Watch AppTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -137,6 +172,29 @@
 			productReference = 136AB8B63059103700476989 /* WristWatcher Watch App.app */;
 			productType = "com.apple.product-type.application";
 		};
+		2DC92C398D1346B3CE92F47D /* WristWatcher Watch AppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 545CB363A9758424255D33DA /* Build configuration list for PBXNativeTarget "WristWatcher Watch AppTests" */;
+			buildPhases = (
+				81B1AA80B64CE62DC9E2942E /* Sources */,
+				0037812F6A08588013CEA5DD /* Frameworks */,
+				C13FD892B20DABF2F8E75377 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C96E6BCDBDF81AB6FD5269D9 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				345A7B4A59AF58FA231F2DCC /* WristWatcher Watch AppTests */,
+			);
+			name = "WristWatcher Watch AppTests";
+			packageProductDependencies = (
+			);
+			productName = "WristWatcher Watch AppTests";
+			productReference = 06413B2CA9003FB8C1F0FDC1 /* WristWatcher Watch AppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -152,6 +210,15 @@
 					};
 					136AB8B53059103700476989 = {
 						CreatedOnToolsVersion = 26.6;
+						SystemCapabilities = {
+							com.apple.HealthKit = {
+								enabled = 1;
+							};
+						};
+					};
+					2DC92C398D1346B3CE92F47D = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 136AB8B53059103700476989;
 					};
 				};
 			};
@@ -171,6 +238,7 @@
 			targets = (
 				136AB8A83059103600476989 /* WristWatcher */,
 				136AB8B53059103700476989 /* WristWatcher Watch App */,
+				2DC92C398D1346B3CE92F47D /* WristWatcher Watch AppTests */,
 			);
 		};
 /* End PBXProject section */
@@ -184,6 +252,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		136AB8B43059103700476989 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C13FD892B20DABF2F8E75377 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -207,6 +282,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		81B1AA80B64CE62DC9E2942E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -214,6 +296,11 @@
 			isa = PBXTargetDependency;
 			target = 136AB8B53059103700476989 /* WristWatcher Watch App */;
 			targetProxy = 136AB8B83059103700476989 /* PBXContainerItemProxy */;
+		};
+		C96E6BCDBDF81AB6FD5269D9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 136AB8B53059103700476989 /* WristWatcher Watch App */;
+			targetProxy = 72D88BBAD3FE8CD0FCA1490F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -339,12 +426,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "WristWatcher Watch App/WristWatcher Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = P23A73L3J8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "WristWatcher Watch App/InfoPlist-Supplement.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = WristWatcher;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "WristWatcher uses HealthKit to keep a workout session running so it can sample motion continuously with the wrist down and the screen off.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "WristWatcher uses HealthKit to keep a workout session running so it can sample motion continuously with the wrist down and the screen off.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "WristWatcher reads wrist motion to classify posture during a session.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.kae.WristWatcher;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -372,12 +464,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "WristWatcher Watch App/WristWatcher Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = P23A73L3J8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "WristWatcher Watch App/InfoPlist-Supplement.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = WristWatcher;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "WristWatcher uses HealthKit to keep a workout session running so it can sample motion continuously with the wrist down and the screen off.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "WristWatcher uses HealthKit to keep a workout session running so it can sample motion continuously with the wrist down and the screen off.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "WristWatcher reads wrist motion to classify posture during a session.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.kae.WristWatcher;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -412,6 +509,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WristWatcher;
+				INFOPLIST_KEY_NSMotionUsageDescription = "WristWatcher reads wrist motion to classify posture during a session.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -447,6 +545,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = WristWatcher;
+				INFOPLIST_KEY_NSMotionUsageDescription = "WristWatcher reads wrist motion to classify posture during a session.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -471,6 +570,58 @@
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
+		};
+		EB0E7B3488EFDE6399306125 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P23A73L3J8;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kae.WristWatcher.watchkitapp.WristWatcherWatchAppTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WristWatcher Watch App.app/WristWatcher Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
+		F51F4DA61DCA5E85B05C7C05 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P23A73L3J8;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kae.WristWatcher.watchkitapp.WristWatcherWatchAppTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WristWatcher Watch App.app/WristWatcher Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
@@ -498,6 +649,15 @@
 			buildConfigurations = (
 				136AB8C83059103800476989 /* Debug */,
 				136AB8C93059103800476989 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		545CB363A9758424255D33DA /* Build configuration list for PBXNativeTarget "WristWatcher Watch AppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F51F4DA61DCA5E85B05C7C05 /* Debug */,
+				EB0E7B3488EFDE6399306125 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

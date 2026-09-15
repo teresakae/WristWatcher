@@ -1,0 +1,12 @@
+data/
+*.csv
+*.mov
+*.mp4
+*.jpg
+*.jpeg
+*.heic
+*.xcappdata/
+.DS_Store
+xcuserdata/
+*.mlmodel
+*.mlmodelc
