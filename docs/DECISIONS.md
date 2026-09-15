@@ -44,3 +44,44 @@ correction; not made here, since this repo doesn't own that file.
 that adding an XCTest target after other work is underway means hand-editing
 `project.pbxproj` by hand. D0 adds the (empty) target now, while the project is
 otherwise empty and a mistake costs nothing.
+
+---
+
+## 2026-09-15 — D2 feature contract
+
+**[`FEATURE-CONTRACT.md`](FEATURE-CONTRACT.md) created, and it is the authority
+for the 36-feature vector.** D0 deferred it because D0 shipped no feature code;
+D1 shipped `RingBuffer` with no real length or stride for the same reason. D2
+needs it, so it exists now: 9 channels in the collector CSV's column order, the
+4 statistics of `features.DEFAULT_STATS`, stat-major / channel-minor layout,
+population SD with `ddof = 0`, and numpy's `method="linear"` percentile.
+
+**Window frozen at 200 samples / 100 stride (2.0 s, 50% overlap at 100 Hz).**
+Carried over from `research/pipeline-design-decisions.md` §2.1, which chose 2.0 s
+from the NinaPro DB5 sweep explicitly without sight of the author's own data. It
+is frozen rather than left configurable because D2 is an exactness argument and
+an unfrozen window has nothing to be exact about. A later sweep on own data may
+move it; that is a contract change, and the D5 model must be retrained at the
+new value. The model and the contract are a matched pair.
+
+**The parity check runs the thesis code, it does not reimplement it.**
+`tools/parity_fixture.py` imports `features.py` and `windowing.py` from the
+thesis repo by path and executes them, then writes the expected vectors as a
+fixture that `FeatureParityTests` replays through `RingBuffer` and
+`FeatureExtractor`. A Python reimplementation living in this repo would be a
+third thing to keep in sync, and agreement between two copies of the same
+misunderstanding is not evidence.
+
+**Parity is asserted to ~1e-12 relative, not bit-for-bit.** numpy sums pairwise,
+Swift sums sequentially; the measured worst-case disagreement is 5.8e-15
+relative. Every mistake the contract guards against is 1e-3 or larger, so the
+bound separates them by orders of magnitude. See `FEATURE-CONTRACT.md` §7.1.
+
+**No scaling on device.** The converted Core ML object is the whole sklearn
+`Pipeline(StandardScaler -> estimator)`, so the fitted scaler constants ship
+inside the model. The Swift extractor emits raw features; normalizing on device
+would scale twice.
+
+**A non-finite window is dropped, never imputed.** Mirrors the trust boundary at
+`features.py` line 75. Zero-filling or carrying the last good vector forward
+would fabricate an observation, and the haptic would fire on it.
