@@ -137,3 +137,25 @@ scripted toggle held non-neutral, haptic fired on the 5th consecutive window;
 re-toggling inside 30 s did not refire; past 30 s it fired again. Unit tests
 (`HapticControllerTests`) cover the N−1 boundary, the same reset case, and
 the cooldown/refire timing.
+
+---
+
+## 2026-09-15 — D4 session summary + transfer, closed on hardware
+
+**`modelIdentifier = "scripted-v0"`** for every summary until D5 wires in the
+real Core ML model's identifier. Distinguishes pre-model sessions from
+post-model ones in phone history, since the thesis compares across model
+versions.
+
+**`Transfer.swift` reduced from the collector's**, not copied whole. The
+collector's version (P2/P3) exists to move a file safely: queued/sent/acked
+states, SHA-256 + byte-count metadata, one retry then fail. None of that
+applies here — this app's own ARCHITECTURE.md §6 already calls for
+`transferUserInfo`, not `transferFile`, because the payload is a small
+dictionary, and `transferUserInfo` already queues and retries on its own. No
+ACK: read-only companion, no file whose deletion depends on confirmed
+receipt.
+
+**D4 gate passed on hardware 2026-09-15.** Stopping a watch session produced
+a row in the iPhone history list with model id, alert count, and
+non-neutral/total window ratio.

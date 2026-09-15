@@ -22,6 +22,9 @@ import Observation
 @Observable
 final class WorkoutKeepAlive: NSObject {
     private(set) var isActive = false
+    /// Set only on an unexpected end/error — nil means the session ran to a
+    /// clean `stop()`. Consumed by SessionEngine's SessionSummary on stop().
+    private(set) var invalidationReason: String?
 
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -29,6 +32,7 @@ final class WorkoutKeepAlive: NSObject {
     private var expectedEnd = false
 
     func start() {
+        invalidationReason = nil
         guard HKHealthStore.isHealthDataAvailable() else { return }
         healthStore.requestAuthorization(toShare: [HKObjectType.workoutType()], read: []) { [weak self] ok, _ in
             guard ok else { return }
@@ -67,6 +71,7 @@ final class WorkoutKeepAlive: NSObject {
     }
 
     private func persistInvalidation(_ reason: String) {
+        invalidationReason = reason
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let url = dir.appendingPathComponent("workout_invalidations.log")
         let line = "\(Date().timeIntervalSince1970) \(reason)\n"

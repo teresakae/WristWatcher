@@ -48,6 +48,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		136ABA313059443900476989 /* Exceptions for "WristWatcher Watch App" folder in "WristWatcher" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				SessionSummary.swift,
+			);
+			target = 136AB8A83059103600476989 /* WristWatcher */;
+		};
 		469FC7FE9EC9C4E3DBB199EA /* Exceptions for "WristWatcher Watch App" folder in "WristWatcher Watch App" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -66,6 +73,7 @@
 		136AB8BA3059103700476989 /* WristWatcher Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				136ABA313059443900476989 /* Exceptions for "WristWatcher Watch App" folder in "WristWatcher" target */,
 				469FC7FE9EC9C4E3DBB199EA /* Exceptions for "WristWatcher Watch App" folder in "WristWatcher Watch App" target */,
 			);
 			path = "WristWatcher Watch App";

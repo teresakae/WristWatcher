@@ -9,9 +9,11 @@ import SwiftUI
 
 @main
 struct WristWatcherApp: App {
+    @State private var receiver = Receiver()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(receiver: receiver)
         }
     }
 }
