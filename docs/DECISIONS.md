@@ -65,7 +65,7 @@ move it; that is a contract change, and the D5 model must be retrained at the
 new value. The model and the contract are a matched pair.
 
 **The parity check runs the thesis code, it does not reimplement it.**
-`tools/parity_fixture.py` imports `features.py` and `windowing.py` from the
+`tools/parity.py` imports `features.py` and `windowing.py` from the
 thesis repo by path and executes them, then writes the expected vectors as a
 fixture that `FeatureParityTests` replays through `RingBuffer` and
 `FeatureExtractor`. A Python reimplementation living in this repo would be a
@@ -85,3 +85,55 @@ would scale twice.
 **A non-finite window is dropped, never imputed.** Mirrors the trust boundary at
 `features.py` line 75. Zero-filling or carrying the last good vector forward
 would fabricate an observation, and the haptic would fire on it.
+
+**D2 closes on real watch data, but not on a collector rehearsal CSV.** The gate
+in [README.md](../README.md) asks for parity on a full collector rehearsal CSV.
+No such file exists on this machine: `WristWatch/data/` is absent, and the three
+`com.kae.WristWatch` app containers pulled on 2026-09-15 disappeared from
+`~/Documents/Personal/WristWatch/` the same afternoon, before they could be read.
+
+What D2 did run on is the August pilot-recorder corpus — 5 recordings, 1,166
+windows, every one matching. That is real watch motion at the same nine channels
+in the same order: real gravity near −0.998, real 100 Hz jitter, real `Double`
+bit patterns. Its header is 12 columns, not the collector's 16, so `parity.py`
+validates only the first ten (`timestamp` plus the nine channels) and ignores the
+rest, none of which reaches a feature.
+
+Remaining for a full gate: one collector-format rehearsal CSV through the same
+command. Not a code change — a file that does not exist yet.
+
+**The parity suite's window-grid check is single-bout only.** `windowing.py`
+restarts its grid at each bout and refuses straddling windows; `RingBuffer` is
+stride-aligned from the first sample and has no bout concept, correctly, because
+a live wrist has no bouts. On the 7-posture August file that is 425 windows
+against 433, with starts that do not align. Feature parity is therefore asserted
+over Python's own window starts, and the grids are compared only where there is
+one bout. See `FEATURE-CONTRACT.md` §7.2.
+
+---
+
+## 2026-09-15 — D3 haptic controller, closed on hardware
+
+**Debounce + cooldown constants set:** `consecutiveWindowsToFire = 5`
+(~5 s at the D2 contract's 200/100 windows), `cooldownSeconds = 30`,
+`probabilityThreshold = 0.5`. `HapticPolicy` carries these; not yet exposed
+as user-facing settings (out of D0's scope list, unchanged since).
+
+**One preset, no graded cueing, is a platform limit, not a D3 simplification.**
+watchOS has no Core Haptics — no custom waveforms — so there is no mechanism
+to grade the cue by deviation size or duration even if wanted. This also
+converges with `tuken2025`'s finding that multi-level cueing is
+contraindicated, which is part of why the classifier output is binary in the
+first place. Both belong in the thesis's Batasan Masalah.
+
+**`ScriptedClassifier` stands in for the D5 Core ML model.** It ignores the
+feature vector and returns a probability set directly — by a debug toggle in
+`ContentView` for the hardware gate, by tests otherwise. `HapticController`
+only ever sees a probability; D5 replaces the classifier type, not the
+controller.
+
+**D3 gate passed on hardware 2026-09-15.** Apple Watch Series 11 (46 mm):
+scripted toggle held non-neutral, haptic fired on the 5th consecutive window;
+re-toggling inside 30 s did not refire; past 30 s it fired again. Unit tests
+(`HapticControllerTests`) cover the N−1 boundary, the same reset case, and
+the cooldown/refire timing.

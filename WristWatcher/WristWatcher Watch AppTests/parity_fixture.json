@@ -1,5 +1,5 @@
 {
- "_generated_by": "tools/parity_fixture.py",
+ "_generated_by": "tools/parity.py",
  "_contract": "docs/FEATURE-CONTRACT.md",
  "_source": "synthetic, seeded",
  "window_length": 200,

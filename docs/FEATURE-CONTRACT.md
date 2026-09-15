@@ -166,6 +166,55 @@ It is **not** channel-blocked (`grav_x_mean, grav_x_std, grav_x_p25, ...`).
 Channel-blocked is the intuitive layout and the wrong one; a model fed it runs
 and is wrong.
 
+### 4.1 The 36 feature names, in order — normative
+
+Emitted by `features.feature_names(channels, DEFAULT_STATS)`. This table is the
+list the D2 gate asks for; index is the position in the Core ML input vector.
+
+| # | Feature |
+|---|---|
+| 0 | `grav_x_mean` |
+| 1 | `grav_y_mean` |
+| 2 | `grav_z_mean` |
+| 3 | `uacc_x_mean` |
+| 4 | `uacc_y_mean` |
+| 5 | `uacc_z_mean` |
+| 6 | `gyro_x_mean` |
+| 7 | `gyro_y_mean` |
+| 8 | `gyro_z_mean` |
+| 9 | `grav_x_std` |
+| 10 | `grav_y_std` |
+| 11 | `grav_z_std` |
+| 12 | `uacc_x_std` |
+| 13 | `uacc_y_std` |
+| 14 | `uacc_z_std` |
+| 15 | `gyro_x_std` |
+| 16 | `gyro_y_std` |
+| 17 | `gyro_z_std` |
+| 18 | `grav_x_p25` |
+| 19 | `grav_y_p25` |
+| 20 | `grav_z_p25` |
+| 21 | `uacc_x_p25` |
+| 22 | `uacc_y_p25` |
+| 23 | `uacc_z_p25` |
+| 24 | `gyro_x_p25` |
+| 25 | `gyro_y_p25` |
+| 26 | `gyro_z_p25` |
+| 27 | `grav_x_p75` |
+| 28 | `grav_y_p75` |
+| 29 | `grav_z_p75` |
+| 30 | `uacc_x_p75` |
+| 31 | `uacc_y_p75` |
+| 32 | `uacc_z_p75` |
+| 33 | `gyro_x_p75` |
+| 34 | `gyro_y_p75` |
+| 35 | `gyro_z_p75` |
+
+`FeatureExtractor.featureNames` is asserted equal to this list, element for
+element, in `FeatureParityTests.testVectorLayoutMatchesPython` — against the
+fixture's copy of Python's own output, not against a transcription of this
+table.
+
 ---
 
 ## 5. No scaling on device
@@ -203,25 +252,72 @@ window is a fabricated observation and the haptic would fire on it.
 
 ## 7. Parity check
 
-`tools/parity_fixture.py` imports the thesis repo's `features.py` and
-`windowing.py` **by path** and runs them. It never reimplements them — a
-reimplementation would be a third thing to keep in sync, and the failure mode
-this whole file exists to prevent.
+`tools/parity.py` imports the thesis repo's `features.py` and `windowing.py`
+**by path** and runs them. It never reimplements them -- a reimplementation would
+be a third thing to keep in sync, and the failure mode this whole file exists to
+prevent.
 
-It writes `WristWatcher Watch AppTests/parity_fixture.json`: a synthetic sample
-stream plus the expected window starts and 36-vectors. `FeatureParityTests`
-replays that stream through `RingBuffer` and `FeatureExtractor` and compares.
+It writes a fixture -- a sample stream, the window starts
+`windowing.window_indices` produced for it, and the 36-vector `features.extract`
+produced for each. `FeatureParityTests` replays that stream through
+`RingBuffer` and `FeatureExtractor` and compares.
 
 ```bash
-python3 tools/parity_fixture.py            # synthetic, regenerates the fixture
-python3 tools/parity_fixture.py <file.csv> # a real collector CSV, off-repo, prints only
+# synthetic, seeded; rewrites the committed fixture
+python3 tools/parity.py
+
+# a real recording; writes a scratch fixture and prints the command below
+python3 tools/parity.py <file.csv>
+
+# run the Swift side against that scratch fixture
+TEST_RUNNER_PARITY_FIXTURE="<printed path>" xcodebuild test \
+  -project WristWatcher/WristWatcher.xcodeproj \
+  -scheme "WristWatcher Watch App" \
+  -only-testing:'WristWatcher Watch AppTests/FeatureParityTests'
 ```
 
-The committed fixture is **synthetic and seeded**. No participant CSV enters
-this repo (`CLAUDE.md`), and the `<file.csv>` form deliberately prints a report
-instead of writing one.
+**The `TEST_RUNNER_` prefix is not optional.** xcodebuild does not forward its
+own environment to the simulator test process; it forwards only variables with
+that prefix, stripped. A bare `PARITY_FIXTURE=` is silently ignored, the suite
+falls back to the committed fixture, and the run passes without having read the
+file you named. Confirm which fixture ran from the `parity: N windows` line --
+the committed one is 7 windows, a real recording is hundreds.
 
-### 7.1 Tolerance, and why it is not zero
+Only the committed fixture is synthetic and seeded. A fixture built from a real
+recording is written to a scratch directory and committed nowhere: it is derived
+from participant-adjacent data (`CLAUDE.md`), and the collector and thesis repos
+are read-only from here.
+
+### 7.1 Which CSVs it accepts
+
+The first ten columns must be `timestamp` plus the nine channels of section 2,
+in that order. Everything after them is ignored, because no feature is computed
+from any of it. This accepts both the collector's 16-column
+`DATA-CONTRACT.md` section 2.1 file and the older 12-column pilot-recorder file
+(`timestamp`, 9 channels, `axis`, `angle_deg`).
+
+What is *not* relaxed is the order of those ten. A reordered writer produces a
+file that loads cleanly and means something else.
+
+### 7.2 Two different window grids, and why only one is compared
+
+`windowing.py` restarts its window grid at each bout and refuses any window that
+would straddle two of them. `RingBuffer` is stride-aligned from the first sample
+and runs forever, because a live wrist has no bout boundaries to straddle.
+
+On a multi-posture recording the two therefore disagree, and neither is wrong:
+the August pilot file `posture-neutral-20260807-004108.csv` has 7 posture runs,
+from which Python extracts 425 windows and the ring emits 433 -- the 8 extra are
+exactly the ones straddling a posture change. Their *starts* do not even align
+(Python: 3645, 3745, ...; ring: 3600, 3700, ...).
+
+So the grids are compared only where there is one bout -- the committed fixture,
+and what the device itself produces. Feature parity is asserted over Python's own
+window starts, sliced directly out of the stream, because which windows exist is
+the bout rule's business and this contract is about what the 36 numbers are once
+a window exists.
+
+### 7.3 Tolerance, and why it is not zero
 
 Each feature is compared against the Python value with
 

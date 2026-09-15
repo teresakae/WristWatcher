@@ -20,6 +20,13 @@ struct ContentView: View {
             Button(engine.isRunning ? "Stop" : "Start") {
                 engine.isRunning ? engine.stop() : engine.start()
             }
+            // D3 gate control: scripts the stub classifier's output since
+            // there is no real model until D5.
+            Toggle("Non-neutral", isOn: Binding(
+                get: { engine.classifier.probability >= 0.5 },
+                set: { engine.classifier.probability = $0 ? 1.0 : 0.0 }
+            ))
+            .font(.caption)
         }
         .padding()
     }
