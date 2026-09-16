@@ -22,20 +22,8 @@ struct RunningView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                if isLuminanceReduced {
-                    TimelineView(.everyMinute) { context in
-                        elapsedText(context.date, secondsVisible: false)
-                    }
-                } else {
-                    TimelineView(.periodic(from: engine.startedAt, by: 1)) { context in
-                        elapsedText(context.date, secondsVisible: true)
-                    }
-                }
-
-                Label("\(engine.alertCount) posture alerts", systemImage: "bell.badge")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityElement(children: .combine)
+                ElapsedReadout(startedAt: engine.startedAt, isLuminanceReduced: isLuminanceReduced)
+                AlertCountBadge(count: engine.alertCount)
 
                 if !isLuminanceReduced {
                     Button("Stop") { engine.stop() }
@@ -46,10 +34,29 @@ struct RunningView: View {
             .padding()
         }
     }
+}
+
+/// TimelineView-driven elapsed time, largest element on the screen. Schedule
+/// and precision both follow \.isLuminanceReduced — see file header.
+private struct ElapsedReadout: View {
+    let startedAt: Date
+    let isLuminanceReduced: Bool
+
+    var body: some View {
+        if isLuminanceReduced {
+            TimelineView(.everyMinute) { context in
+                text(for: context.date, secondsVisible: false)
+            }
+        } else {
+            TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                text(for: context.date, secondsVisible: true)
+            }
+        }
+    }
 
     @ViewBuilder
-    private func elapsedText(_ now: Date, secondsVisible: Bool) -> some View {
-        let elapsed = max(0, Int(now.timeIntervalSince(engine.startedAt)))
+    private func text(for now: Date, secondsVisible: Bool) -> some View {
+        let elapsed = max(0, Int(now.timeIntervalSince(startedAt)))
         let minutes = elapsed / 60
         let seconds = elapsed % 60
 
@@ -64,6 +71,20 @@ struct RunningView: View {
                 .monospacedDigit()
                 .accessibilityLabel("\(minutes) minutes")
         }
+    }
+}
+
+/// Passive tally, not a live warning — deliberately not a bell. Nothing on
+/// RunningView should read as an active "you're doing this wrong" cue; the
+/// haptic carries that, the screen only logs a count (design §2.2).
+private struct AlertCountBadge: View {
+    let count: Int
+
+    var body: some View {
+        Label("\(count) posture alerts", systemImage: "exclamationmark.circle")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
     }
 }
 

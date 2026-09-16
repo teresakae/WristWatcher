@@ -25,7 +25,7 @@ struct ContentView: View {
                 } else {
                     ForEach(receiver.summaries) { summary in
                         NavigationLink(value: summary) {
-                            row(summary)
+                            SessionRow(summary: summary)
                         }
                     }
                 }
@@ -36,28 +36,34 @@ struct ContentView: View {
             }
         }
     }
+}
 
-    private func row(_ summary: SessionSummary) -> some View {
+/// One row: date + duration leading, non-neutral fraction trailing — the
+/// one number a row scanned at arm's length supports (design §3.1).
+private struct SessionRow: View {
+    let summary: SessionSummary
+
+    var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(summary.startedAt, style: .date) + Text(" ") + Text(summary.startedAt, style: .time)
-                Text(durationText(summary))
+                Text(durationText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text(fractionText(summary))
+            Text(fractionText)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
         }
     }
 
-    private func durationText(_ summary: SessionSummary) -> String {
+    private var durationText: String {
         let seconds = max(0, Int(summary.endedAt.timeIntervalSince(summary.startedAt)))
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
-    private func fractionText(_ summary: SessionSummary) -> String {
+    private var fractionText: String {
         guard summary.windowCount > 0 else { return "0%" }
         let fraction: Double = Double(summary.nonNeutralWindowCount) / Double(summary.windowCount)
         let pct: Int = Int((fraction * 100).rounded())

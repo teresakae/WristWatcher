@@ -19,12 +19,12 @@ struct SummaryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if let summary = engine.lastSummary {
-                    row("Duration", durationText(summary))
-                    row("Windows classified", "\(summary.windowCount)")
-                    row("Non-neutral", fractionText(summary))
-                    row("Alerts", "\(summary.alertCount)")
-                    row("Transfer", transferText)
-                    row("Measured rate", "\(String(format: "%.0f", summary.sampleRateHz)) Hz")
+                    SummaryRow(label: "Duration", value: durationText(summary))
+                    SummaryRow(label: "Windows classified", value: "\(summary.windowCount)")
+                    SummaryRow(label: "Non-neutral", value: fractionText(summary))
+                    SummaryRow(label: "Alerts", value: "\(summary.alertCount)")
+                    SummaryRow(label: "Transfer", value: transferText)
+                    SummaryRow(label: "Measured rate", value: "\(String(format: "%.0f", summary.sampleRateHz)) Hz")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -55,8 +55,14 @@ struct SummaryView: View {
         let pct: Int = Int((fraction * 100).rounded())
         return "\(pct)%"
     }
+}
 
-    private func row(_ label: String, _ value: String) -> some View {
+/// One label/value pair, combined into a single VoiceOver utterance.
+private struct SummaryRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
         HStack {
             Text(label)
             Spacer()
