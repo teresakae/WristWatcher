@@ -7,9 +7,10 @@
 //  sentence naming the cause — a greyed-out button with no explanation is
 //  the failure mode this exists to prevent.
 //
-//  The D3/D5 gate driver (the "Non-neutral" toggle) lives here behind
-//  #if DEBUG, de-emphasized below Start. It is scaffolding, not a settings
-//  screen — §5 of the design excludes a settings screen explicitly.
+//  D5: the #if DEBUG "Non-neutral" toggle that used to live here is gone —
+//  it scripted ScriptedClassifier's output "before D5 has a real model"
+//  (its own former header comment). D5 landing retires it; Start now leads
+//  to real enrollment (EnrollmentView), not a scripted probability.
 //
 
 import SwiftUI
@@ -31,16 +32,16 @@ struct IdleView: View {
                         .buttonStyle(.borderedProminent)
                         .handGestureShortcut(.primaryAction)
 
-                    if let last = engine.lastSummary {
+                    if let failure = engine.enrollmentFailure {
+                        Text(failure)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    } else if let last = engine.lastSummary {
                         Text(last.startedAt, style: .relative)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-
-                #if DEBUG
-                DebugPostureToggle(classifier: engine.classifier)
-                #endif
             }
             .padding()
         }
@@ -61,22 +62,6 @@ private struct BlockedNotice: View {
             .foregroundStyle(.secondary)
     }
 }
-
-#if DEBUG
-/// D3/D5 gate driver: scripts ScriptedClassifier's output. Scaffolding, not
-/// a settings screen — see file header.
-private struct DebugPostureToggle: View {
-    let classifier: ScriptedClassifier
-
-    var body: some View {
-        Toggle("Non-neutral", isOn: Binding(
-            get: { classifier.probability >= 0.5 },
-            set: { classifier.probability = $0 ? 1.0 : 0.0 }
-        ))
-        .font(.caption2)
-    }
-}
-#endif
 
 #Preview {
     IdleView(engine: SessionEngine())

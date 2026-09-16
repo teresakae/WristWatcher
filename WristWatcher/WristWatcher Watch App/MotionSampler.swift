@@ -42,6 +42,12 @@ final class MotionSampler {
 
     private let ringBuffer: RingBuffer<MotionSample>
 
+    /// Called on every raw sample before it reaches the window ring buffer.
+    /// Return nil to drop the sample (D5 enrollment: no window may see an
+    /// un-anchored sample); return a sample — possibly transformed, e.g. the
+    /// D5 anchor subtraction — to admit it. Runs on `queue`, never main.
+    var sampleFilter: (MotionSample) -> MotionSample? = { $0 }
+
     // Rolling-window rate estimate, same technique as the collector's
     // MotionRecorder: preallocated ring, sort only at the throttled read
     // below, so the per-sample cost stays O(1).
@@ -92,12 +98,14 @@ final class MotionSampler {
         let a = motion.userAcceleration
         let r = motion.rotationRate
 
-        ringBuffer.push(MotionSample(
+        if let admitted = sampleFilter(MotionSample(
             timestamp: ts,
             gravity: (g.x, g.y, g.z),
             userAcceleration: (a.x, a.y, a.z),
             rotationRate: (r.x, r.y, r.z)
-        ))
+        )) {
+            ringBuffer.push(admitted)
+        }
 
         if let last = lastTimestamp {
             diffRing[diffIndex % diffRing.count] = ts - last

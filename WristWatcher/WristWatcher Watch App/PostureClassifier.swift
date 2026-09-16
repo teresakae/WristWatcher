@@ -2,24 +2,19 @@
 //  PostureClassifier.swift
 //  WristWatcher Watch App
 //
-//  D3 stand-in for the D5 Core ML model (README.md's D3 row: "driven by a
-//  stub classifier — no Core ML yet"). ScriptedClassifier ignores the
-//  feature vector entirely; the D3 hardware gate scripts `probability`
-//  directly (e.g. a debug control in ContentView) to drive HapticController
-//  through the N-consecutive-windows and cooldown behavior without a trained
-//  model. D5 replaces this type, not HapticController.
+//  D5: the real Core ML model (CoreMLPostureClassifier.swift) implements
+//  this protocol. Unchanged from D3 — see docs/DECISIONS.md.
 //
-
-import Observation
 
 protocol PostureClassifier {
     /// Probability the window is non-neutral posture, in [0, 1].
     func classify(_ features: [Double]) -> Double
 }
 
-@Observable
-final class ScriptedClassifier: PostureClassifier {
-    var probability: Double = 0
-
-    func classify(_ features: [Double]) -> Double { probability }
+/// SessionEngine's fallback when the bundled Core ML model can't load — a
+/// missing/broken model is a packaging problem, not something to crash on at
+/// launch. Always returns 0 (neutral), so a broken build never fires a
+/// haptic on a classification it isn't actually making.
+struct NullClassifier: PostureClassifier {
+    func classify(_ features: [Double]) -> Double { 0 }
 }

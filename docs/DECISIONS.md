@@ -6,6 +6,90 @@ then here as a re-derivation, not as the original decision.
 
 ---
 
+## 2026-09-16 — D5 real Core ML model + enrollment calibration
+
+**`FEATURE-CONTRACT.md` §5 changed** — a per-donning gravity anchor is
+subtracted from `grav_x/y/z` upstream of `FeatureExtractor`, in
+`MotionSampler`'s new `sampleFilter` hook. Not inside the `.mlmodel`: the
+scaler is fitted once at training time, the anchor is fitted fresh every
+session from a 10 s neutral-wrist enrollment hold. See §5.1 for why folding
+it into the model would defeat the point.
+
+**Parity does not cover the anchor transform, by decision, not oversight.**
+`tools/parity.py` and `FeatureParityTests` are unchanged — they validate the
+36-vector downstream of an (implicitly zero) anchor. The anchor arithmetic
+itself is covered by `EnrollmentTests.swift` instead, because there is no
+Python reference on the thesis side that `tools/parity.py` could import it
+from (`study_loader.py`'s `calibration="anchor"` isn't in `features.py`/
+`windowing.py`, the only two modules `parity.py` imports). See
+`FEATURE-CONTRACT.md` §5.2.
+
+**`SessionState` gains `.enrolling`, between `.idle` and `.running`.**
+`start()` no longer goes straight to running — it begins a 10 s enrollment
+hold (`Enrollment.swift`), and `MotionSampler.sampleFilter` returns `nil`
+for every raw sample until an anchor exists, so no un-anchored sample can
+ever reach the classification window ring. A failed or cancelled enrollment
+returns to `.idle` without ever running — no classification, no haptic, on
+an uncalibrated session. `docs/UI-SPEC.md` has nothing on enrollment (a gap,
+not an exclusion); `EnrollmentView.swift` is the smallest thing that fits the
+existing screens' plain-text style — a cue, a `TimelineView` countdown, a
+Cancel button. No progress ring, matching the rest of the app.
+
+**The D3 debug toggle (`ScriptedClassifier`, `DebugPostureToggle`) is
+deleted, not just unwired.** Its own header comment already said it existed
+"before D5 has a real model" — D5 landing is what retires it, confirmed by
+grep: nothing else referenced `ScriptedClassifier`.
+
+**`CoreMLPostureClassifier` replaces the stub, behind the unchanged
+`PostureClassifier` protocol.** Loads `ship_logreg_binary.mlmodelc` from the
+bundle, `computeUnits = .all`. `modelIdentifier` reads the loaded model's own
+`.versionString`/`.description` metadata, falling back to `"unknown"` — not
+hard-coded, since which model shipped is the thesis comparison's outcome. If
+the bundled model fails to load, `SessionEngine` falls back to a new
+`NullClassifier` (always returns 0/neutral) rather than crashing at launch —
+a missing model is a packaging problem to surface, not paper over.
+
+**Fixed a main-actor bug found while wiring the real classifier.**
+`SessionEngine`'s `onWindow` closure called `classifier.classify(features)`
+*inside* `DispatchQueue.main.async` — harmless for the D3 stub, but exactly
+the "sustained main-thread work" pattern `thesis/research/deployment-path.md`
+cites as the `HKWorkoutSession` cancellation trigger, now that classification
+means a real Core ML forward pass. Moved outside the `main.async` block, onto
+the same background queue `FeatureExtractor.extract` already runs on; only
+the `@Observable` property writes and `HapticController.classify` (documented
+non-thread-safe, main-only) stay inside it.
+
+**`ship_logreg_binary.mlmodel` copied from the thesis repo's export
+directory into the Watch App folder, not committed** — `.gitignore` already
+blocks `*.mlmodel`/`*.mlmodelc`, unrelaxed. The project uses Xcode's
+file-system-synchronized groups (`PBXFileSystemSynchronizedRootGroup` in
+`project.pbxproj`), so the file needs no `project.pbxproj` edit to build into
+the target — confirm target membership in Xcode after pulling this change,
+since it can't be verified from here.
+
+**`thesis/pilot/latency-harness/` does not exist**, despite
+`research/deployment-path.md` §4 describing it as written and verified —
+confirmed by directory listing, not assumed. Built `LatencyHarness.swift` /
+`LatencyHarnessView.swift` in this repo instead: model-agnostic (enumerates
+every compiled `.mlmodelc` in the bundle), 20 discarded warm-ups + 200 timed
+iterations off the main actor, mean/SD/p50/p95/max in ms, real compiled size
+from the bundle. Uses this app's actual `HKWorkoutSession` +
+`workout-processing` runtime session, **not** the thesis doc's
+`WKExtendedRuntimeSession` + `physical-therapy` wiring — `CLAUDE.md` already
+marks that fallback dead; not reintroduced here. Run once via a temporary
+root-view swap in `WristWatcherApp.swift` (swap back after), same pattern the
+thesis doc itself recommends for its own harness. Results are read off the
+watch/console and written into `deployment-path.md` §4.4 by hand — that repo
+is read-only from here.
+
+**D5 is not closed.** The gate is physical-hardware-only (replay comparison
+feeding the same anchor to both the Python and watch sides, live enrollment
+blocking a skipped/failed hold, latency table filled with real numbers, a
+live haptic on genuinely non-neutral posture) — see the phase's own gate
+description. Not run here.
+
+---
+
 ## 2026-09-15 — D0 bootstrap
 
 **Summary-only transfer to the iPhone companion.** The watch pushes a session

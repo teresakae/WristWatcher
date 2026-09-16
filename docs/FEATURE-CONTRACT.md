@@ -217,7 +217,7 @@ table.
 
 ---
 
-## 5. No scaling on device
+## 5. No scaling on device — except the per-donning gravity anchor
 
 The Swift extractor emits **raw, unscaled** feature values.
 
@@ -229,7 +229,58 @@ object are the same object. The model scales its own input.
 
 Normalizing on device would scale twice. Do not add a normalization step, a
 gravity-magnitude correction, a unit conversion, or a filter between the
-extractor and the model input.
+extractor and the model input — **with one exception, added in D5.**
+
+### 5.1 The D5 gravity anchor
+
+The shipped model (`ship_logreg_binary.mlmodel`) is fitted on gravity
+channels with a per-donning offset removed
+(`ship_logreg_binary_meta.json`'s `calibration: "anchor"`). The watch sits at
+a participant-specific band hole, and each donning shifts the sensor frame
+enough to move one person's neutral onto another's ulnar deviation — measured,
+not assumed: without the anchor the model sits at 0.562 balanced accuracy
+(chance), with it, 0.615.
+
+At the start of every session, before any classification, the app runs a 10 s
+neutral-wrist enrollment hold (`Enrollment.swift`), discards the first and
+last 2 s, and averages the middle 6 s of `grav_x`/`grav_y`/`grav_z` into a
+per-session `GravityAnchor`. Every subsequent raw sample has that anchor
+subtracted from its gravity channels — `uacc_*` and `gyro_*` pass through
+untouched — in `MotionSampler`'s `sampleFilter`, **upstream of
+`FeatureExtractor`**, on the raw sample, not the 36-vector.
+
+**This is not inside the `.mlmodel` and cannot be, on purpose.** The scaler
+is fitted once, at training time, over all participants. The anchor is fitted
+fresh every session, from that session's own enrollment hold — it is
+per-donning, not per-model. Folding it into the model would require refitting
+per wearer per donning, which is exactly the thing enrollment exists to avoid
+needing. **Do not later "simplify" this by moving the subtraction into the
+model or by reusing a cached anchor across sessions** — a donning the app
+cannot detect is exactly the failure this protects against
+(`Enrollment.swift`'s header).
+
+A failed or cancelled enrollment produces no anchor, and per §6, no anchor
+means no classification and no haptic for that session — an unanchored
+window is as fabricated an observation as a non-finite one.
+
+### 5.2 What the parity check does and does not cover
+
+`tools/parity.py` and `FeatureParityTests` are **unchanged by D5** and
+validate only the 36-vector computed from an already-anchored sample stream
+— the fixture's synthetic gravity values are, implicitly, anchor = 0. The
+anchor arithmetic itself (the mean-of-middle-6s, the per-sample subtraction)
+is **not covered by parity** — there is no Python reference to import it
+against; `study_loader.py`'s `calibration="anchor"` implements the training
+side, but `tools/parity.py` only imports `features.py`/`windowing.py`, not
+`study_loader.py`.
+
+That gap is covered instead by `EnrollmentTests.swift`, a Swift-only unit
+test against synthetic timestamps and gravity values — not a parity check,
+because there is nothing on the Python side to check it against beyond what
+`ship_logreg_binary_meta.json`'s `anchor_calibration_spec` already states in
+prose. If the anchor arithmetic ever drifts from that spec, `EnrollmentTests`
+is the only thing that catches it — it fails silently everywhere else,
+exactly like every other failure mode this file exists to prevent.
 
 ---
 

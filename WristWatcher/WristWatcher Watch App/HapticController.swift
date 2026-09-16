@@ -14,7 +14,7 @@ import WatchKit
 /// "Debounce + cooldown haptic policy" — exact values are a D3 decision, not
 /// carried over from anywhere.
 struct HapticPolicy {
-    var consecutiveWindowsToFire = 5   // ≈5 s at 200/100 windows
+    var consecutiveWindowsToFire = 3   // ≈3 s at 200/100 windows
     var cooldownSeconds = 30.0
     var probabilityThreshold = 0.5
 }
