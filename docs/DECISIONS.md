@@ -159,3 +159,46 @@ receipt.
 **D4 gate passed on hardware 2026-09-15.** Stopping a watch session produced
 a row in the iPhone history list with model id, alert count, and
 non-neutral/total window ratio.
+
+---
+
+## 2026-09-16 — UI pass, slotted between D4 and D5
+
+**Ran between D4 and D5, against `thesis/research/watcher-ui-design.md` and
+the new `docs/UI-SPEC.md` it's derived from.** No new capability: no Core ML,
+no sensing change, no `HapticPolicy` arithmetic change. Both `ContentView`s
+went from debug readouts to the real view hierarchy — `RootView` /
+`IdleView` / `RunningView` / `SummaryView` on the watch,
+`HistoryListView` / `SessionDetailView` on iOS.
+
+**The D1 prompt's "wrist down and screen off" was wrong.** `HKWorkoutSession`
+keeps the app frontmost in Always-On Display — the screen dims, it doesn't
+turn off, for the whole session. See `watcher-ui-design.md` §1.1 and
+`UI-SPEC.md` §1. `RunningView` now branches on `\.isLuminanceReduced` and
+drives elapsed time off `TimelineView` (`.periodic` bright, `.everyMinute`
+dimmed) instead of a `Timer`, dropping to minutes-only when dimmed.
+
+**`SessionEngine.isRunning: Bool` replaced with a 3-case `SessionState`
+(`idle` / `running` / `finished`).** `SummaryView` needed a real finished
+state — inferring it from "not running" is also true before the first
+session ever runs. `SessionEngine` also now retains `lastSummary` (was built
+and dropped in `stop()`) and exposes `startedAt` and a `blockedReason`
+computed property (motion unavailable / HealthKit denied / no companion) for
+`IdleView`'s blocked state.
+
+**`Transfer` gained a `queued`/`sent`/`failed` state**, set from the now-
+implemented `session(_:didFinish:error:)` delegate call. `SummaryView`'s
+transfer row reads it directly rather than implying the record has arrived
+the instant `stop()` returns — `transferUserInfo` is eventual.
+
+**The D3 debug toggle moved behind `#if DEBUG`,** off the primary flow, into
+`IdleView`. It's still the only way to drive `ScriptedClassifier` before D5
+has a real model, so D5's hardware gate must run a **Debug** build — that's
+how it would be launched from Xcode anyway, not a new constraint in
+practice.
+
+**Haptic bookend cues (session-started / session-ended) are not wired.** The
+design's §2.5 names three cues; only the middle one (`HapticController`'s
+`.notification`) exists in code. Adding the bookends wasn't in this pass's
+prerequisite list, so it's left as a documented gap (`UI-SPEC.md` §2.1)
+rather than built quietly.

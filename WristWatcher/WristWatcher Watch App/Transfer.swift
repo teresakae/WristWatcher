@@ -10,11 +10,26 @@
 //  metadata, no ACK, no custom retry. `transferUserInfo` queues and retries
 //  on its own (WCSession persists undelivered items across launches).
 //
+//  UI pass: SummaryView's transfer row needs to know queued vs. sent vs.
+//  failed rather than implying the record has already arrived.
+//
 
 import Foundation
+import Observation
 import WatchConnectivity
 
+@Observable
 final class Transfer: NSObject {
+    enum TransferState: Equatable {
+        case queued, sent, failed
+    }
+
+    private(set) var state: TransferState = .queued
+
+    var isCompanionAvailable: Bool {
+        WCSession.isSupported() && WCSession.default.isCompanionAppInstalled
+    }
+
     override init() {
         super.init()
         guard WCSession.isSupported() else { return }
@@ -23,13 +38,21 @@ final class Transfer: NSObject {
     }
 
     func send(_ summary: SessionSummary) {
+        state = .queued
         let session = WCSession.default
         guard session.activationState == .activated,
-              let data = try? JSONEncoder().encode(summary) else { return }
+              let data = try? JSONEncoder().encode(summary) else {
+            state = .failed
+            return
+        }
         session.transferUserInfo(["summary": data])
     }
 }
 
 extension Transfer: WCSessionDelegate {
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+
+    func session(_ session: WCSession, didFinish userInfoTransfer: WCSessionUserInfoTransfer, error: Error?) {
+        DispatchQueue.main.async { self.state = error == nil ? .sent : .failed }
+    }
 }
