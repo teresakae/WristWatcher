@@ -12,6 +12,34 @@ records raw CSV under a scripted recording protocol for training data. This
 app is what a wearer runs day to day; it reads nothing from the collector's
 data and writes nothing back to it.
 
+## Stack
+
+- Swift, SwiftUI — watchOS + iOS targets
+- Core ML — on-device binary classifier (`ship_logreg_binary.mlmodel`)
+- HealthKit (`HKWorkoutSession`) — background-safe runtime session
+- WatchConnectivity (`transferUserInfo`) — watch → phone summary handoff
+- XCTest — watch unit tests
+- Python (`tools/parity.py`) — feature-extractor parity check against the thesis pipeline
+
+## Project Structure
+
+```
+WristWatcher/
+├── WristWatcher/                  iOS companion app (history UI, receiver)
+├── WristWatcher Watch App/        watch app: sensing, features, model, haptics, transfer
+│   └── ship_logreg_binary.mlmodel Core ML binary classifier
+├── WristWatcher WatchAppTests/    XCTest unit + parity tests
+└── WristWatcher.xcodeproj/
+docs/
+├── ARCHITECTURE.md                state flow and pipeline
+├── PLATFORM-FACTS.md              banner-stamped facts snapshot
+├── DECISIONS.md                   dated decision log
+├── FEATURE-CONTRACT.md            authoritative 36-feature spec
+└── UI-SPEC.md                     UI spec
+tools/
+└── parity.py                      Swift vs. Python feature parity check
+```
+
 ## Hardware
 
 - Apple Watch Series 11 (46 mm) — development device
