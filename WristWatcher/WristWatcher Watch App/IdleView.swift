@@ -19,6 +19,7 @@ struct IdleView: View {
     var engine: SessionEngine
 
     var body: some View {
+        NavigationStack {
         ScrollView {
             VStack(spacing: 12) {
                 Text("Ready")
@@ -42,8 +43,12 @@ struct IdleView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+
+                NavigationLink("Latency test") { LatencyHarnessView() }
+                    .font(.caption)
             }
             .padding()
+        }
         }
     }
 }

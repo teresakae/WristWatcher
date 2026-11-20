@@ -6,6 +6,13 @@ then here as a re-derivation, not as the original decision.
 
 ---
 
+## 2026-11-20 — Latency harness also an in-app Release screen
+
+The Core ML latency harness (`HarnessLatencyTests`) is also available as a
+"Latency test" screen on the watch Idle view (`LatencyHarness.swift`), in
+Release builds too, so it can run from TestFlight. It runs `gb` and `logreg`
+only, and sends the raw per-call CSV to the iPhone with `transferFile`.
+
 ## 2026-09-16 — D5 real Core ML model + enrollment calibration
 
 **`FEATURE-CONTRACT.md` §5 changed** — a per-donning gravity anchor is

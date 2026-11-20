@@ -2,138 +2,159 @@
 //  LatencyHarness.swift
 //  WristWatcher Watch App
 //
-//  D5 part 5 ("measure it"). thesis/research/deployment-path.md §4 describes
-//  a harness at thesis/pilot/latency-harness/ as already written and
-//  verified — confirmed by directory listing that it doesn't exist on disk.
-//  Built here instead, following that doc's §4.3 method (docs/DECISIONS.md,
-//  2026-09-16): per model, 20 discarded warm-up iterations then 200 timed
-//  ones, mean/SD/p50/p95/max in ms, plus real compiled size in the bundle.
-//
-//  Model-agnostic: enumerates every compiled .mlmodelc in the bundle rather
-//  than naming ship_logreg_binary, even though only one model ships — this
-//  app only ever needs one, but nothing here assumes that.
-//
-//  Runs off the main actor (Task.detached) — same reasoning as
-//  CoreMLPostureClassifier / SessionEngine: sustained main-thread work is
-//  the documented HKWorkoutSession cancellation trigger, and this harness
-//  runs its 200-iteration loop inside a real HKWorkoutSession
-//  (WorkoutKeepAlive) so the measurement reflects the app's actual runtime
-//  session, not thesis's WKExtendedRuntimeSession wiring, which
-//  docs/CLAUDE.md marks dead.
-//
-//  Not part of the normal app flow — see LatencyHarnessView.swift's header
-//  for how to run it.
+//  The thesis latency harness (same loop as HarnessLatencyTests) runnable from
+//  a Release/TestFlight build. gb.mlmodel, logreg.mlmodel and
+//  harness_windows.csv sit in this folder, git-ignored (*.mlmodel, *.csv),
+//  copied from the thesis repo, never committed. Does not touch
+//  HKWorkoutSession or SessionEngine. Simulator timings mean nothing.
 //
 
 import CoreML
-import Foundation
+import SwiftUI
+import WatchConnectivity
 
-struct LatencyResult {
-    let modelName: String
-    let compiledSizeBytes: Int64
-    let meanMs: Double
-    let sdMs: Double
-    let p50Ms: Double
-    let p95Ms: Double
-    let maxMs: Double
+struct LatencyModelResult {
+    let name: String
+    let n: Int
+    let p95: Double, mean: Double, p50: Double, max: Double
+    let labelDiff: Int
+}
+
+struct LatencyRun {
+    let models: [LatencyModelResult]
+    let device: String, os: String, config: String
+    let rawCSV: String   // "model,window,ms"
 }
 
 enum LatencyHarness {
-    private static let warmupIterations = 20
-    private static let timedIterations = 200
+    private static let names = ["gb", "logreg"]
+    private static let warmup = 20
 
-    /// Every compiled model in the app bundle, benchmarked in turn. Runs on
-    /// whatever thread it's called from — callers run it off the main actor.
-    static func run() -> [LatencyResult] {
-        compiledModelURLs().compactMap(benchmark(modelAt:))
+    static func run() async throws -> LatencyRun {
+        try await Task.detached(priority: .userInitiated) { try measure() }.value
     }
 
-    private static func compiledModelURLs() -> [URL] {
-        guard let resourceURL = Bundle.main.resourceURL,
-              let entries = try? FileManager.default.contentsOfDirectory(at: resourceURL, includingPropertiesForKeys: nil)
-        else { return [] }
-        return entries.filter { $0.pathExtension == "mlmodelc" }
-    }
+    private static func measure() throws -> LatencyRun {
+        guard let csvURL = Bundle.main.url(forResource: "harness_windows", withExtension: "csv") else { throw err("harness_windows.csv missing from bundle") }
+        let lines = try String(contentsOf: csvURL, encoding: .utf8)
+            .split(whereSeparator: \.isNewline).map { $0.split(separator: ",", omittingEmptySubsequences: false).map(String.init) }
+        let rows = Array(lines.dropFirst())
+        let col = Dictionary(uniqueKeysWithValues: lines[0].enumerated().map { ($1, $0) })
 
-    private static func benchmark(modelAt url: URL) -> LatencyResult? {
-        let config = MLModelConfiguration()
-        config.computeUnits = .all
-        guard let model = try? MLModel(contentsOf: url, configuration: config),
-              let input = syntheticInput(for: model)
-        else { return nil }
+        var u = utsname(); uname(&u)
+        let machine = withUnsafeBytes(of: &u.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        #if DEBUG
+        let config = "Debug"
+        #else
+        let config = "Release"
+        #endif
 
-        for _ in 0..<warmupIterations {
-            _ = try? model.prediction(from: input)
-        }
+        var raw = "model,window,ms\n", results = [LatencyModelResult]()
+        for name in names {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else { throw err("\(name).mlmodelc missing from bundle") }
+            let model = try MLModel(contentsOf: url)
+            let inputs = Array(model.modelDescription.inputDescriptionsByName.keys)
+            if let m = inputs.first(where: { col[$0] == nil }) { throw err("\(name): CSV lacks \(m)") }
+            guard let labelCol = col[name] else { throw err("CSV lacks \(name) label column") }
 
-        var samplesMs = [Double]()
-        samplesMs.reserveCapacity(timedIterations)
-        for _ in 0..<timedIterations {
-            let start = DispatchTime.now()
-            _ = try? model.prediction(from: input)
-            let end = DispatchTime.now()
-            samplesMs.append(Double(end.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000)
-        }
-
-        return LatencyResult(
-            modelName: url.deletingPathExtension().lastPathComponent,
-            compiledSizeBytes: directorySize(url),
-            meanMs: mean(samplesMs),
-            sdMs: standardDeviation(samplesMs),
-            p50Ms: percentile(samplesMs.sorted(), 50),
-            p95Ms: percentile(samplesMs.sorted(), 95),
-            maxMs: samplesMs.max() ?? 0
-        )
-    }
-
-    /// One value per named input, typed and shaped from the model's own
-    /// description — this is what keeps the harness model-agnostic across
-    /// the sklearn-converter path (36 named doubles) and the kNN builder
-    /// path (one MLMultiArray), per deployment-path.md §4.1.
-    private static func syntheticInput(for model: MLModel) -> MLDictionaryFeatureProvider? {
-        var values = [String: MLFeatureValue]()
-        for (name, description) in model.modelDescription.inputDescriptionsByName {
-            switch description.type {
-            case .double:
-                values[name] = MLFeatureValue(double: 0)
-            case .int64:
-                values[name] = MLFeatureValue(int64: 0)
-            case .multiArray:
-                guard let constraint = description.multiArrayConstraint,
-                      let array = try? MLMultiArray(shape: constraint.shape, dataType: constraint.dataType)
-                else { return nil }
-                values[name] = MLFeatureValue(multiArray: array)
-            default:
-                return nil
+            // Inputs built before timing; only the model call is timed.
+            let providers = try rows.map { r in
+                try MLDictionaryFeatureProvider(dictionary: Dictionary(uniqueKeysWithValues: inputs.map {
+                    ($0, MLFeatureValue(double: Double(r[col[$0]!])!))
+                }))
             }
+            for p in providers.prefix(warmup) { _ = try model.prediction(from: p) }
+
+            var ms = [Double](), diff = 0
+            ms.reserveCapacity(providers.count)
+            for (i, p) in providers.enumerated() {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let out = try model.prediction(from: p)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                ms.append(Double(t1 - t0) / 1e6)
+                if out.featureValue(for: "label")?.stringValue != rows[i][labelCol] { diff += 1 }
+                raw += "\(name),\(i),\(ms[i])\n"
+            }
+            let s = ms.sorted()
+            results.append(.init(name: name, n: s.count, p95: pct(s, 95), mean: s.reduce(0, +) / Double(s.count),
+                                 p50: pct(s, 50), max: s.last!, labelDiff: diff))
         }
-        return try? MLDictionaryFeatureProvider(dictionary: values)
+        return LatencyRun(models: results, device: machine,
+                          os: ProcessInfo.processInfo.operatingSystemVersionString, config: config, rawCSV: raw)
     }
 
-    private static func directorySize(_ url: URL) -> Int64 {
-        guard let enumerator = FileManager.default.enumerator(
-            at: url, includingPropertiesForKeys: [.fileSizeKey]
-        ) else { return 0 }
-        var total: Int64 = 0
-        for case let fileURL as URL in enumerator {
-            total += Int64((try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+    /// Linear interpolation between closest ranks, numpy.percentile's default.
+    private static func pct(_ s: [Double], _ q: Double) -> Double {
+        let h = Double(s.count - 1) * q / 100, lo = Int(h)
+        return lo + 1 < s.count ? s[lo] + (h - Double(lo)) * (s[lo + 1] - s[lo]) : s[lo]
+    }
+
+    private static func err(_ m: String) -> NSError { NSError(domain: "LatencyHarness", code: 1, userInfo: [NSLocalizedDescriptionKey: m]) }
+}
+
+/// Plain results screen. Run count is per launch. After a run the raw per-call
+/// CSV goes to the iPhone with WCSession.transferFile (session is already
+/// activated by Transfer, created in SessionEngine).
+struct LatencyHarnessView: View {
+    @State private var run: LatencyRun?
+    @State private var error: String?
+    @State private var isRunning = false
+    @State private var runNumber = 0
+    @State private var sentNote: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                if isRunning {
+                    ProgressView("Running…")
+                } else {
+                    if let error {
+                        Text(error).font(.caption).foregroundStyle(.red)
+                    }
+                    if let run {
+                        ForEach(run.models, id: \.name) { m in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(m.name).font(.caption).bold()
+                                Text("p95 \(f(m.p95)) ms  mean \(f(m.mean)) ms").font(.caption2)
+                                Text("label diff \(m.labelDiff) of \(m.n)").font(.caption2)
+                            }
+                        }
+                        Text("\(run.device)  \(run.os)").font(.caption2).foregroundStyle(.secondary)
+                        Text("\(run.config), run \(runNumber)").font(.caption2).foregroundStyle(.secondary)
+                        if let sentNote { Text(sentNote).font(.caption2).foregroundStyle(.secondary) }
+                    }
+                    Button(run == nil ? "Run" : "Run again") { start() }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding()
         }
-        return total
+        .navigationTitle("Latency test")
     }
 
-    private static func mean(_ x: [Double]) -> Double { x.reduce(0, +) / Double(x.count) }
-
-    private static func standardDeviation(_ x: [Double]) -> Double {
-        let m = mean(x)
-        let variance = x.reduce(0) { $0 + ($1 - m) * ($1 - m) } / Double(x.count)
-        return variance.squareRoot()
+    private func start() {
+        isRunning = true; error = nil; sentNote = nil
+        Task {
+            do {
+                let r = try await LatencyHarness.run()
+                runNumber += 1
+                run = r
+                sentNote = send(r)
+            } catch {
+                self.error = error.localizedDescription
+            }
+            isRunning = false
+        }
     }
 
-    /// Nearest-rank — this is a diagnostic harness, not FEATURE-CONTRACT.md's
-    /// exactness argument, so numpy's linear interpolation isn't needed here.
-    private static func percentile(_ sorted: [Double], _ q: Double) -> Double {
-        guard !sorted.isEmpty else { return 0 }
-        let index = min(sorted.count - 1, Int((q / 100.0) * Double(sorted.count)))
-        return sorted[index]
+    private func send(_ r: LatencyRun) -> String {
+        let session = WCSession.default
+        guard session.activationState == .activated else { return "iPhone link not active; raw CSV not sent" }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("latency_raw_\(r.config)_\(runNumber).csv")
+        do { try r.rawCSV.write(to: url, atomically: true, encoding: .utf8) } catch { return "raw CSV not saved" }
+        session.transferFile(url, metadata: ["kind": "latency", "device": r.device, "os": r.os, "config": r.config])
+        return "Raw CSV queued to iPhone"
     }
+
+    private func f(_ x: Double) -> String { String(format: "%.3f", x) }
 }

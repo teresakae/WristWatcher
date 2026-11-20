@@ -29,6 +29,15 @@ struct ContentView: View {
                         }
                     }
                 }
+                if !receiver.latencyFiles.isEmpty {
+                    Section("Latency test files") {
+                        ForEach(receiver.latencyFiles, id: \.self) { url in
+                            ShareLink(item: url) {
+                                Label(url.lastPathComponent, systemImage: "square.and.arrow.up")
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle("Sessions")
             .navigationDestination(for: SessionSummary.self) { summary in
