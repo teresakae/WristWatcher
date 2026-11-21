@@ -32,9 +32,11 @@ final class SessionEngine {
     private let sampler: MotionSampler
     private let ringBuffer: RingBuffer<MotionSample>
     private let transfer = Transfer()
-    /// nil when the model is missing or the replay script is invalid;
-    /// `blockedReason` then keeps Start disabled.
-    let classifier: ActivityClassifier?
+    /// Chosen in start(): launch-arg replay, else the Test mode preset, else
+    /// the Core ML model. Only reassigned while idle, before samples flow.
+    /// A missing Core ML model keeps Start disabled (`blockedReason`).
+    private(set) var classifier: ActivityClassifier?
+    private let coreML = CoreMLActivityClassifier()
 
     var measuredHz: Double { sampler.measuredHz }
     var sampleCount: Int { sampler.sampleCount }
@@ -44,7 +46,7 @@ final class SessionEngine {
     /// Fresh HKHealthStore/CMMotionManager instances: these are capability
     /// queries, not instance state, so a second instance reads the same answer.
     var blockedReason: String? {
-        if classifier == nil {
+        if coreML == nil {
             return "No classifier: the model is missing from the app, or the replay script is invalid."
         }
         if !CMMotionManager().isDeviceMotionAvailable {
@@ -66,13 +68,7 @@ final class SessionEngine {
     private var segments: [Segment] = []
 
     init() {
-        // Launch argument `-replayScript typing*30,mouse*20,rest*10` (see
-        // ReplayClassifier); UserDefaults exposes launch arguments.
-        if let script = UserDefaults.standard.string(forKey: "replayScript") {
-            classifier = ReplayClassifier(script: script)
-        } else {
-            classifier = CoreMLActivityClassifier()
-        }
+        classifier = coreML
 
         ringBuffer = RingBuffer<MotionSample>(
             length: FeatureExtractor.windowLength,
@@ -96,6 +92,7 @@ final class SessionEngine {
         windowIndex = 0
         secondsByActivity = [:]
         segments = []
+        classifier = Self.chooseClassifier(fallback: coreML)
         ringBuffer.reset()
 
         // Callback comes from the HealthKit delegate queue. The id check keeps
@@ -109,6 +106,20 @@ final class SessionEngine {
         workout.start()
         sampler.start()
         state = .running
+    }
+
+    /// Launch argument `-replayScript ...` wins, then the Test mode preset
+    /// (UserDefaults "testPreset"), then the real model. An invalid replay
+    /// script yields nil, which stops nothing here but classifies nothing.
+    static func chooseClassifier(fallback: ActivityClassifier?) -> ActivityClassifier? {
+        let defaults = UserDefaults.standard
+        if let script = defaults.string(forKey: "replayScript") {
+            return ReplayClassifier(script: script)
+        }
+        if let script = TestPreset.named(defaults.string(forKey: "testPreset") ?? "real").script {
+            return ReplayClassifier(script: script)
+        }
+        return fallback
     }
 
     /// One window = one second. Window i (1-based, ends 1 s after window
