@@ -3,7 +3,7 @@
 //  WristWatcher Watch App
 //
 //  The thesis latency harness (same loop as HarnessLatencyTests) runnable from
-//  a Release/TestFlight build. gb.mlmodel, logreg.mlmodel and
+//  a Release/TestFlight build. gb, logreg, svc_rbf, cart and rf .mlmodel plus
 //  harness_windows.csv sit in this folder, git-ignored (*.mlmodel, *.csv),
 //  copied from the thesis repo, never committed. Does not touch
 //  HKWorkoutSession or SessionEngine. Simulator timings mean nothing.
@@ -12,6 +12,7 @@
 import CoreML
 import SwiftUI
 import WatchConnectivity
+import WatchKit
 
 struct LatencyModelResult {
     let name: String
@@ -23,18 +24,48 @@ struct LatencyModelResult {
 struct LatencyRun {
     let models: [LatencyModelResult]
     let device: String, os: String, config: String
-    let rawCSV: String   // "model,window,ms"
+    /// First line is a "# " metadata line (pandas: comment='#' or skiprows=1), then
+    /// "model,window,ms,pred,ref" (pred = Core ML label, ref = label in the CSV).
+    let rawCSV: String
 }
 
 enum LatencyHarness {
-    private static let names = ["gb", "logreg"]
+    private static let names = ["gb", "logreg", "svc_rbf", "cart", "rf"]
     private static let warmup = 20
 
-    static func run() async throws -> LatencyRun {
-        try await Task.detached(priority: .userInitiated) { try measure() }.value
+    @MainActor
+    static func run(runNumber: Int) async throws -> LatencyRun {
+        // WKInterfaceDevice is main-actor, so battery, start thermal and time are read here.
+        let dev = WKInterfaceDevice.current()
+        dev.isBatteryMonitoringEnabled = true
+        let state: String
+        switch dev.batteryState {
+        case .charging: state = "charging"
+        case .full: state = "full"
+        case .unplugged: state = "unplugged"
+        default: state = "unknown"
+        }
+        let battery = dev.batteryLevel < 0 ? "battery unknown \(state)" : "battery \(Int((dev.batteryLevel * 100).rounded()))% \(state)"
+        let thermal0 = thermalName()
+        let iso = ISO8601DateFormatter()
+        iso.timeZone = .current
+        let when = iso.string(from: Date())
+        return try await Task.detached(priority: .userInitiated) {
+            try measure(runNumber: runNumber, battery: battery, thermal0: thermal0, when: when)
+        }.value
     }
 
-    private static func measure() throws -> LatencyRun {
+    private static func thermalName() -> String {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: "nominal"
+        case .fair: "fair"
+        case .serious: "serious"
+        case .critical: "critical"
+        @unknown default: "unknown"
+        }
+    }
+
+    private static func measure(runNumber: Int, battery: String, thermal0: String, when: String) throws -> LatencyRun {
         guard let csvURL = Bundle.main.url(forResource: "harness_windows", withExtension: "csv") else { throw err("harness_windows.csv missing from bundle") }
         let lines = try String(contentsOf: csvURL, encoding: .utf8)
             .split(whereSeparator: \.isNewline).map { $0.split(separator: ",", omittingEmptySubsequences: false).map(String.init) }
@@ -49,7 +80,7 @@ enum LatencyHarness {
         let config = "Release"
         #endif
 
-        var raw = "model,window,ms\n", results = [LatencyModelResult]()
+        var raw = "model,window,ms,pred,ref\n", results = [LatencyModelResult]()
         for name in names {
             guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else { throw err("\(name).mlmodelc missing from bundle") }
             let model = try MLModel(contentsOf: url)
@@ -72,15 +103,17 @@ enum LatencyHarness {
                 let out = try model.prediction(from: p)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 ms.append(Double(t1 - t0) / 1e6)
-                if out.featureValue(for: "label")?.stringValue != rows[i][labelCol] { diff += 1 }
-                raw += "\(name),\(i),\(ms[i])\n"
+                let pred = out.featureValue(for: "label")?.stringValue ?? ""
+                if pred != rows[i][labelCol] { diff += 1 }
+                raw += "\(name),\(i),\(ms[i]),\(pred),\(rows[i][labelCol])\n"
             }
             let s = ms.sorted()
             results.append(.init(name: name, n: s.count, p95: pct(s, 95), mean: s.reduce(0, +) / Double(s.count),
                                  p50: pct(s, 50), max: s.last!, labelDiff: diff))
         }
-        return LatencyRun(models: results, device: machine,
-                          os: ProcessInfo.processInfo.operatingSystemVersionString, config: config, rawCSV: raw)
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        let meta = "# \(machine) | \(os) | \(config) | run \(runNumber) | \(battery) | thermal start \(thermal0) end \(thermalName()) | \(when)\n"
+        return LatencyRun(models: results, device: machine, os: os, config: config, rawCSV: meta + raw)
     }
 
     /// Linear interpolation between closest ranks, numpy.percentile's default.
@@ -136,7 +169,7 @@ struct LatencyHarnessView: View {
         isRunning = true; error = nil; sentNote = nil
         Task {
             do {
-                let r = try await LatencyHarness.run()
+                let r = try await LatencyHarness.run(runNumber: runNumber + 1)
                 runNumber += 1
                 run = r
                 sentNote = send(r)

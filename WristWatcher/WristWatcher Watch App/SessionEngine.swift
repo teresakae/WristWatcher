@@ -2,24 +2,16 @@
 //  SessionEngine.swift
 //  WristWatcher Watch App
 //
-//  D3 scope: windows now feed FeatureExtractor, then the (stub, D3) classifier,
-//  then HapticController. windowedSampleCount still exists for the on-screen
-//  hardware gate check.
+//  Iteration 3: Start goes straight to running (no enrollment, no gravity
+//  anchor: the model was trained on raw gravity). Each 2 s window (100
+//  samples apart) is classified once; a window counts as one second, so the
+//  first second of a session is unclassified (docs/ITERATION3_PLAN.md
+//  section 5). The engine keeps seconds per activity and the segment list,
+//  and sends a SessionSummary to the phone when the session finishes.
 //
-//  D4: tallies windowsRefused/nonNeutralWindowCount/alertCount alongside it,
-//  and pushes a SessionSummary to the phone on stop().
-//
-//  UI pass: isRunning replaced by a 3-case state (SummaryView needs a real
-//  "finished" state, not just "not running" — that's also true before the
-//  first session). Keeps lastSummary for SummaryView to display, and exposes
-//  startedAt/blockedReason/transferState for the new views.
-//
-//  D5: state gains `.enrolling` — start() no longer goes straight to
-//  running. The model needs a per-donning gravity anchor (FEATURE-CONTRACT.md
-//  §5); until Enrollment produces one, MotionSampler's sampleFilter returns
-//  nil so no un-anchored sample ever reaches the classification window ring.
-//  A failed or cancelled enrollment returns to .idle without ever running —
-//  refuse loudly, don't classify on a fabricated observation (§6's spirit).
+//  A session finishes exactly once: Stop (main queue) and a system-ended
+//  workout (HK delegate queue, hopped to main) both go through `finish`,
+//  and the first one in wins.
 //
 
 import CoreMotion
@@ -30,32 +22,31 @@ import Observation
 @Observable
 final class SessionEngine {
     enum SessionState: Equatable {
-        case idle, enrolling, running, finished
+        case idle, running, finished
     }
 
     private(set) var state: SessionState = .idle
-    private(set) var windowedSampleCount = 0
     private(set) var lastSummary: SessionSummary?
-    /// Set when enrollment fails or is cancelled; shown on IdleView, cleared
-    /// on the next start().
-    private(set) var enrollmentFailure: String?
 
-    private let workout = WorkoutKeepAlive()
+    let workout = WorkoutKeepAlive()  // not private: tests fire onUnexpectedEnd
     private let sampler: MotionSampler
-    private let haptics = HapticController()
+    private let ringBuffer: RingBuffer<MotionSample>
     private let transfer = Transfer()
-    private let enrollment = Enrollment()
-    let classifier: PostureClassifier
+    /// nil when the model is missing or the replay script is invalid;
+    /// `blockedReason` then keeps Start disabled.
+    let classifier: ActivityClassifier?
 
     var measuredHz: Double { sampler.measuredHz }
+    var sampleCount: Int { sampler.sampleCount }
     var transferState: Transfer.TransferState { transfer.state }
 
     /// Why Start is disabled on IdleView, or nil when nothing blocks it.
-    /// Fresh HKHealthStore/CMMotionManager instances, not WorkoutKeepAlive's
-    /// or MotionSampler's — both files are off-limits, and these are
-    /// capability queries, not instance state, so a second instance reads
-    /// the same answer.
+    /// Fresh HKHealthStore/CMMotionManager instances: these are capability
+    /// queries, not instance state, so a second instance reads the same answer.
     var blockedReason: String? {
+        if classifier == nil {
+            return "No classifier: the model is missing from the app, or the replay script is invalid."
+        }
         if !CMMotionManager().isDeviceMotionAvailable {
             return "Motion sensors aren't available on this device."
         }
@@ -69,106 +60,82 @@ final class SessionEngine {
     }
 
     private(set) var startedAt = Date()
-    private(set) var windowsRefused = 0
-    private(set) var nonNeutralWindowCount = 0
-    private(set) var alertCount = 0
     private var sessionId = UUID().uuidString
+    private var windowIndex = 0
+    private var secondsByActivity: [String: Int] = [:]
+    private var segments: [Segment] = []
 
     init() {
-        // A missing bundled model is a packaging problem the student needs
-        // to see, not one to paper over — see EnrollmentView/IdleView's
-        // blockedReason for the same "name the cause" philosophy. Falling
-        // back to a probability-0 classifier keeps the app usable enough to
-        // show that message rather than crashing at launch.
-        classifier = CoreMLPostureClassifier() ?? NullClassifier()
+        // Launch argument `-replayScript typing*30,mouse*20,rest*10` (see
+        // ReplayClassifier); UserDefaults exposes launch arguments.
+        if let script = UserDefaults.standard.string(forKey: "replayScript") {
+            classifier = ReplayClassifier(script: script)
+        } else {
+            classifier = CoreMLActivityClassifier()
+        }
 
-        let ringBuffer = RingBuffer<MotionSample>(
+        ringBuffer = RingBuffer<MotionSample>(
             length: FeatureExtractor.windowLength,
             stride: FeatureExtractor.stride
         )
         sampler = MotionSampler(ringBuffer: ringBuffer)
         ringBuffer.onWindow = { [weak self] window in
             guard let self else { return }
-            guard let features = FeatureExtractor.extract(window) else {
-                DispatchQueue.main.async { self.windowsRefused += 1 }
-                return
-            }
-            // Off the main actor — sustained main-thread work is the
+            // Off the main actor: sustained main-thread work is the
             // documented HKWorkoutSession cancellation trigger.
-            let probability = self.classifier.classify(features)
-            DispatchQueue.main.async {
-                self.windowedSampleCount += 1
-                if probability >= 0.5 { self.nonNeutralWindowCount += 1 }
-                if self.haptics.classify(probability: probability) { self.alertCount += 1 }
-            }
+            let activity = FeatureExtractor.extract(window).flatMap { self.classifier?.classify($0) }
+            DispatchQueue.main.async { self.recordWindow(activity) }
         }
     }
 
-    /// Begins enrollment, not classification — see file header. Wires
-    /// `sampler.sampleFilter` to collect the neutral-hold gravity samples
-    /// and admits nothing to the window ring until an anchor exists.
     func start() {
         guard state == .idle else { return }
-        sessionId = UUID().uuidString
+        let id = UUID().uuidString
+        sessionId = id
         startedAt = Date()
-        windowedSampleCount = 0
-        windowsRefused = 0
-        nonNeutralWindowCount = 0
-        alertCount = 0
-        enrollmentFailure = nil
+        windowIndex = 0
+        secondsByActivity = [:]
+        segments = []
+        ringBuffer.reset()
 
-        enrollment.onComplete = { [weak self] result in
-            DispatchQueue.main.async { self?.handleEnrollmentResult(result) }
+        // Callback comes from the HealthKit delegate queue. The id check keeps
+        // a late callback from ending a later session.
+        workout.onUnexpectedEnd = { [weak self] in
+            DispatchQueue.main.async {
+                guard let self, self.sessionId == id else { return }
+                self.finish(endedBySystem: true)
+            }
         }
-        sampler.sampleFilter = { [weak enrollment] sample in
-            enrollment?.ingest(sample)
-            return nil
-        }
-        enrollment.start()
-
         workout.start()
         sampler.start()
-        state = .enrolling
+        state = .running
     }
 
-    /// EnrollmentView's Cancel button.
-    func cancelEnrollment() {
-        guard state == .enrolling else { return }
-        enrollment.cancel()
-    }
-
-    /// Fires on the main queue (wired in start()) once Enrollment finishes,
-    /// successfully or not. A failure or cancellation returns to .idle
-    /// without ever admitting a sample to the window ring — no
-    /// classification, no haptic, on an uncalibrated session
-    /// (FEATURE-CONTRACT.md §6's refusal spirit).
-    func handleEnrollmentResult(_ result: Enrollment.Result) {
-        guard state == .enrolling else { return }
-        switch result {
-        case let .anchor(anchor):
-            sampler.sampleFilter = { sample in
-                MotionSample(
-                    timestamp: sample.timestamp,
-                    gravity: (
-                        sample.gravity.x - anchor.x,
-                        sample.gravity.y - anchor.y,
-                        sample.gravity.z - anchor.z
-                    ),
-                    userAcceleration: sample.userAcceleration,
-                    rotationRate: sample.rotationRate
-                )
-            }
-            state = .running
-        case let .failed(reason):
-            sampler.stop()
-            workout.stop()
-            enrollmentFailure = reason
-            state = .idle
+    /// One window = one second. Window i (1-based, ends 1 s after window
+    /// i-1) fills seconds [i, i+1); seconds 0..1 are never classified. A window
+    /// with no label (nil) advances time but adds no seconds and ends the
+    /// current segment. Internal, not private, so tests can feed a script.
+    func recordWindow(_ activity: Activity?) {
+        guard state == .running else { return }
+        windowIndex += 1
+        guard let activity else { return }
+        secondsByActivity[activity.rawValue, default: 0] += 1
+        if let last = segments.last, last.activity == activity, last.end == windowIndex {
+            segments[segments.count - 1] = Segment(start: last.start, end: windowIndex + 1, activity: activity)
+        } else {
+            segments.append(Segment(start: windowIndex, end: windowIndex + 1, activity: activity))
         }
     }
 
     func stop() {
+        finish(endedBySystem: false)
+    }
+
+    /// The one place a session ends. Main queue only; the state check makes
+    /// the second of two racing callers (Stop vs system end) a no-op.
+    private func finish(endedBySystem: Bool) {
         guard state == .running else { return }
+        state = .finished
         sampler.stop()
         workout.stop()
 
@@ -176,18 +143,16 @@ final class SessionEngine {
             sessionId: sessionId,
             startedAt: startedAt,
             endedAt: Date(),
+            endedBySystem: endedBySystem,
+            secondsByActivity: secondsByActivity,
+            segments: segments,
             sampleRateHz: sampler.measuredHz,
-            windowCount: windowedSampleCount,
-            windowsRefused: windowsRefused,
-            nonNeutralWindowCount: nonNeutralWindowCount,
-            alertCount: alertCount,
-            modelIdentifier: (classifier as? CoreMLPostureClassifier)?.modelIdentifier ?? "unknown",
+            modelIdentifier: classifier?.modelIdentifier ?? "unknown",
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
             invalidationReason: workout.invalidationReason
         )
         transfer.send(summary)
         lastSummary = summary
-        state = .finished
     }
 
     /// SummaryView's Done button.

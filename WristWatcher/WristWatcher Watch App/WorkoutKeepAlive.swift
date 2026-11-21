@@ -25,6 +25,9 @@ final class WorkoutKeepAlive: NSObject {
     /// Set only on an unexpected end/error — nil means the session ran to a
     /// clean `stop()`. Consumed by SessionEngine's SessionSummary on stop().
     private(set) var invalidationReason: String?
+    /// Called (on the HealthKit delegate queue) after the system ended the
+    /// session without `stop()`. SessionEngine finishes the session from it.
+    @ObservationIgnored var onUnexpectedEnd: (() -> Void)?
 
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -91,6 +94,7 @@ extension WorkoutKeepAlive: HKWorkoutSessionDelegate {
     func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState, from fromState: HKWorkoutSessionState, date: Date) {
         if toState == .ended, !expectedEnd {
             persistInvalidation("unexpected end: \(fromState.rawValue) -> \(toState.rawValue)")
+            onUnexpectedEnd?()
         }
     }
 

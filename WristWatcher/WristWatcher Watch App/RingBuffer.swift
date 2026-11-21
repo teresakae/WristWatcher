@@ -33,6 +33,9 @@ final class RingBuffer<Element> {
         self.onWindow = onWindow
     }
 
+    /// Forget all samples: the next window needs a full `length` new ones.
+    func reset() { totalCount = 0 }
+
     func push(_ sample: Element) {
         storage[totalCount % length] = sample
         totalCount += 1

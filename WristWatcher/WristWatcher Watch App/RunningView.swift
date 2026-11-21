@@ -9,8 +9,9 @@
 //  display that can't update more than once a minute never shows a stale
 //  seconds field.
 //
-//  No live posture class, no chart, no progress ring — each already settled
-//  in the design (§2.2) and not re-litigated here.
+//  No live label, no counts, no haptic, no chart, no progress ring: the
+//  screen shows elapsed time and Stop only (measuring instrument, no live
+//  feedback). The debug build also shows the raw sample count.
 //
 
 import SwiftUI
@@ -23,7 +24,11 @@ struct RunningView: View {
         ScrollView {
             VStack(spacing: 12) {
                 ElapsedReadout(startedAt: engine.startedAt, isLuminanceReduced: isLuminanceReduced)
-                AlertCountBadge(count: engine.alertCount)
+                #if DEBUG
+                Text("\(engine.sampleCount) samples")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                #endif
 
                 if !isLuminanceReduced {
                     Button("Stop") { engine.stop() }
@@ -71,20 +76,6 @@ private struct ElapsedReadout: View {
                 .monospacedDigit()
                 .accessibilityLabel("\(minutes) minutes")
         }
-    }
-}
-
-/// Passive tally, not a live warning — deliberately not a bell. Nothing on
-/// RunningView should read as an active "you're doing this wrong" cue; the
-/// haptic carries that, the screen only logs a count (design §2.2).
-private struct AlertCountBadge: View {
-    let count: Int
-
-    var body: some View {
-        Label("\(count) posture alerts", systemImage: "exclamationmark.circle")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .accessibilityElement(children: .combine)
     }
 }
 

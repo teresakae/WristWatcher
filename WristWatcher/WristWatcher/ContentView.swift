@@ -3,30 +3,38 @@
 //  WristWatcher
 //
 //  watcher-ui-design.md §3.1. Read-only (ARCHITECTURE.md §6) — this view has
-//  no controls, only what the watch has already sent. One number per row
-//  (non-neutral fraction); everything else moved to SessionDetailView. No
+//  no controls, only what the watch has already sent. One line per row
+//  (dominant activity); everything else moved to SessionDetailView. No
 //  pull-to-refresh — delivery is push-based, there's nothing to refresh.
 //
 
+import SwiftData
 import SwiftUI
 
 struct ContentView: View {
     var receiver: Receiver
+    @Environment(\.modelContext) private var context
+    @Query(sort: \StoredSession.startedAt, order: .reverse) private var sessions: [StoredSession]
 
     var body: some View {
         NavigationStack {
             List {
-                if receiver.summaries.isEmpty {
+                if sessions.isEmpty {
                     ContentUnavailableView(
                         "No Sessions Yet",
                         systemImage: "applewatch.watchface",
                         description: Text("Sessions appear here after they finish on your watch.")
                     )
                 } else {
-                    ForEach(receiver.summaries) { summary in
-                        NavigationLink(value: summary) {
-                            SessionRow(summary: summary)
+                    ForEach(sessions) { session in
+                        if let summary = session.summary {
+                            NavigationLink(value: summary) {
+                                SessionRow(summary: summary)
+                            }
                         }
+                    }
+                    .onDelete { offsets in
+                        for i in offsets { context.delete(sessions[i]) }
                     }
                 }
                 if !receiver.latencyFiles.isEmpty {
@@ -36,6 +44,7 @@ struct ContentView: View {
                                 Label(url.lastPathComponent, systemImage: "square.and.arrow.up")
                             }
                         }
+                        .onDelete(perform: receiver.deleteLatencyFiles)
                     }
                 }
             }
@@ -47,8 +56,8 @@ struct ContentView: View {
     }
 }
 
-/// One row: date + duration leading, non-neutral fraction trailing — the
-/// one number a row scanned at arm's length supports (design §3.1).
+/// One row (FR-8): date + duration leading (plus an "Ended by system" tag),
+/// dominant activity trailing.
 private struct SessionRow: View {
     let summary: SessionSummary
 
@@ -56,27 +65,19 @@ private struct SessionRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(summary.startedAt, style: .date) + Text(" ") + Text(summary.startedAt, style: .time)
-                Text(durationText)
+                Text(SessionSummary.format(seconds: summary.durationSeconds))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if summary.endedBySystem {
+                    Text("Ended by system")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
             }
             Spacer()
-            Text(fractionText)
-                .monospacedDigit()
+            Text(summary.dominant?.displayName ?? "No data")
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var durationText: String {
-        let seconds = max(0, Int(summary.endedAt.timeIntervalSince(summary.startedAt)))
-        return String(format: "%d:%02d", seconds / 60, seconds % 60)
-    }
-
-    private var fractionText: String {
-        guard summary.windowCount > 0 else { return "0%" }
-        let fraction: Double = Double(summary.nonNeutralWindowCount) / Double(summary.windowCount)
-        let pct: Int = Int((fraction * 100).rounded())
-        return "\(pct)%"
     }
 }
 
@@ -86,5 +87,7 @@ extension SessionSummary: Hashable {
 }
 
 #Preview {
-    ContentView(receiver: Receiver())
+    let container = try! ModelContainer(for: StoredSession.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    ContentView(receiver: Receiver(context: container.mainContext))
+        .modelContainer(container)
 }

@@ -2,28 +2,29 @@
 //  Receiver.swift
 //  WristWatcher
 //
-//  D4: WCSessionDelegate for the read-only companion (ARCHITECTURE.md §6) —
-//  displays session history, never commands the watch. Persists to
-//  UserDefaults: this is a small, append-only list of summaries, not a data
-//  store worth SwiftData for (out of scope, see CLAUDE.md's D0 scope list).
+//  WCSessionDelegate for the read-only companion (ARCHITECTURE.md §6) —
+//  receives session summaries, never commands the watch. Summaries are stored
+//  in SwiftData (StoredSession); this class decodes on the WCSession queue and
+//  inserts on the main actor, where the model context lives.
 //
 
 import Foundation
 import Observation
+import SwiftData
 import WatchConnectivity
 
 @Observable
 final class Receiver: NSObject {
-    private(set) var summaries: [SessionSummary] = []
     /// Latency-harness CSVs received from the watch, saved in Documents.
     private(set) var latencyFiles: [URL] = []
 
-    private let defaults = UserDefaults.standard
-    private let storageKey = "receiver.summaries"
+    private let context: ModelContext
 
-    override init() {
+    init(context: ModelContext) {
+        self.context = context
         super.init()
-        summaries = Self.load(defaults, key: storageKey)
+        // Posture-era summaries lived in UserDefaults; not migrated.
+        UserDefaults.standard.removeObject(forKey: "receiver.summaries")
         latencyFiles = Self.savedLatencyFiles()
         if WCSession.isSupported() {
             WCSession.default.delegate = self
@@ -31,12 +32,9 @@ final class Receiver: NSObject {
         }
     }
 
-    private func add(_ summary: SessionSummary) {
-        summaries.removeAll { $0.sessionId == summary.sessionId }
-        summaries.insert(summary, at: 0)
-        if let data = try? JSONEncoder().encode(summaries) {
-            defaults.set(data, forKey: storageKey)
-        }
+    func deleteLatencyFiles(at offsets: IndexSet) {
+        for i in offsets { try? FileManager.default.removeItem(at: latencyFiles[i]) }
+        latencyFiles = Self.savedLatencyFiles()
     }
 
     private static var documents: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
@@ -44,12 +42,6 @@ final class Receiver: NSObject {
     private static func savedLatencyFiles() -> [URL] {
         let all = (try? FileManager.default.contentsOfDirectory(at: documents, includingPropertiesForKeys: nil)) ?? []
         return all.filter { $0.lastPathComponent.hasPrefix("latency_raw_") }.sorted { $0.lastPathComponent < $1.lastPathComponent }
-    }
-
-    private static func load(_ defaults: UserDefaults, key: String) -> [SessionSummary] {
-        guard let data = defaults.data(forKey: key),
-              let summaries = try? JSONDecoder().decode([SessionSummary].self, from: data) else { return [] }
-        return summaries
     }
 }
 
@@ -61,7 +53,7 @@ extension Receiver: WCSessionDelegate {
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
         guard let data = userInfo["summary"] as? Data,
               let summary = try? JSONDecoder().decode(SessionSummary.self, from: data) else { return }
-        DispatchQueue.main.async { self.add(summary) }
+        DispatchQueue.main.async { try? StoredSession.upsert(summary, in: self.context) }
     }
 
     func session(_ session: WCSession, didReceive file: WCSessionFile) {

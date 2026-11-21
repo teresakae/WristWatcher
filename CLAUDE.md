@@ -2,10 +2,11 @@
 
 ## What this repo is
 
-The **deployment app** for a watchOS/iOS thesis study on wrist-posture
-classification. A watch app that samples `CMDeviceMotion` at 100 Hz, computes a
-36-feature vector over a sliding window, runs an on-device Core ML binary
-classifier (neutral / non-neutral), fires one haptic on non-neutral posture, and
+The **deployment app** for a watchOS/iOS thesis study on desk activity
+recognition (typing / mouse / handwriting / rest; the app began as a posture
+app). A watch app that samples `CMDeviceMotion` at 100 Hz, computes a
+36-feature vector over a sliding window, runs an on-device Core ML four-class
+classifier, totals time per activity (no haptics, no live feedback), and
 pushes a session summary to an iPhone companion for history. See
 [README.md](README.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

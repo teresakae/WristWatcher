@@ -8,6 +8,7 @@
 //  section is noise.
 //
 
+import Charts
 import SwiftUI
 
 struct SessionDetailView: View {
@@ -18,13 +19,23 @@ struct SessionDetailView: View {
             Section("Session") {
                 LabeledContent("Started", value: summary.startedAt.formatted(date: .abbreviated, time: .shortened))
                 LabeledContent("Ended", value: summary.endedAt.formatted(date: .abbreviated, time: .shortened))
-                LabeledContent("Duration", value: durationText)
+                LabeledContent("Duration", value: SessionSummary.format(seconds: summary.durationSeconds))
+                if summary.endedBySystem {
+                    LabeledContent("Ended by system", value: "Yes")
+                }
             }
-            Section("Posture") {
-                LabeledContent("Windows classified", value: "\(summary.windowCount)")
-                LabeledContent("Non-neutral", value: "\(summary.nonNeutralWindowCount) (\(fractionText))")
-                LabeledContent("Alerts fired", value: "\(summary.alertCount)")
-                LabeledContent("Windows refused", value: "\(summary.windowsRefused)")
+            Section("Activity") {
+                ForEach(Activity.allCases, id: \.self) { activity in
+                    LabeledContent(
+                        activity.displayName,
+                        value: "\(SessionSummary.format(seconds: summary.seconds(activity))) (\(summary.percent(activity))%)"
+                    )
+                }
+            }
+            if !summary.segments.isEmpty {
+                Section("Timeline") {
+                    SegmentTimeline(summary: summary)
+                }
             }
             Section("Recording") {
                 LabeledContent("Measured sample rate", value: "\(String(format: "%.0f", summary.sampleRateHz)) Hz")
@@ -41,17 +52,40 @@ struct SessionDetailView: View {
         .navigationTitle(summary.startedAt.formatted(date: .abbreviated, time: .shortened))
         .navigationBarTitleDisplayMode(.inline)
     }
+}
 
-    private var durationText: String {
-        let seconds = max(0, Int(summary.endedAt.timeIntervalSince(summary.startedAt)))
-        return String(format: "%d:%02d", seconds / 60, seconds % 60)
-    }
+/// FR-9: one horizontal bar, one BarMark per segment, coloured by activity.
+/// X is seconds from session start.
+private struct SegmentTimeline: View {
+    let summary: SessionSummary
 
-    private var fractionText: String {
-        guard summary.windowCount > 0 else { return "0%" }
-        let fraction: Double = Double(summary.nonNeutralWindowCount) / Double(summary.windowCount)
-        let pct: Int = Int((fraction * 100).rounded())
-        return "\(pct)%"
+    private static let colors: [Activity: Color] = [.typing: .blue, .mouse: .orange, .writing: .green, .rest: .gray]
+
+    var body: some View {
+        Chart(summary.segments, id: \.start) { segment in
+            BarMark(
+                xStart: .value("Start", segment.start),
+                xEnd: .value("End", segment.end),
+                y: .value("Session", "Activity")
+            )
+            .foregroundStyle(by: .value("Activity", segment.activity.displayName))
+        }
+        .chartForegroundStyleScale(
+            domain: Activity.allCases.map(\.displayName),
+            range: Activity.allCases.map { Self.colors[$0] ?? .gray }
+        )
+        .chartXScale(domain: 0...max(1, summary.durationSeconds))
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let seconds = value.as(Int.self) { Text(SessionSummary.format(seconds: seconds)) }
+                }
+            }
+        }
+        .chartYAxis(.hidden)
+        .frame(height: 90)
+        .padding(.vertical, 4)
     }
 }
 
@@ -61,12 +95,15 @@ struct SessionDetailView: View {
             sessionId: "preview",
             startedAt: Date(),
             endedAt: Date().addingTimeInterval(600),
+            endedBySystem: false,
+            secondsByActivity: ["typing": 300, "mouse": 200, "rest": 99],
+            segments: [
+                Segment(start: 1, end: 301, activity: .typing),
+                Segment(start: 301, end: 501, activity: .mouse),
+                Segment(start: 501, end: 600, activity: .rest),
+            ],
             sampleRateHz: 99.7,
-            windowCount: 300,
-            windowsRefused: 2,
-            nonNeutralWindowCount: 45,
-            alertCount: 3,
-            modelIdentifier: "scripted-v0",
+            modelIdentifier: "logreg",
             appVersion: "1.0",
             invalidationReason: nil
         ))

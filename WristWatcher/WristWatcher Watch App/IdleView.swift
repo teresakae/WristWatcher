@@ -7,10 +7,7 @@
 //  sentence naming the cause — a greyed-out button with no explanation is
 //  the failure mode this exists to prevent.
 //
-//  D5: the #if DEBUG "Non-neutral" toggle that used to live here is gone —
-//  it scripted ScriptedClassifier's output "before D5 has a real model"
-//  (its own former header comment). D5 landing retires it; Start now leads
-//  to real enrollment (EnrollmentView), not a scripted probability.
+//  Start goes straight to running: no enrollment step.
 //
 
 import SwiftUI
@@ -33,11 +30,7 @@ struct IdleView: View {
                         .buttonStyle(.borderedProminent)
                         .handGestureShortcut(.primaryAction)
 
-                    if let failure = engine.enrollmentFailure {
-                        Text(failure)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    } else if let last = engine.lastSummary {
+                    if let last = engine.lastSummary {
                         Text(last.startedAt, style: .relative)
                             .font(.caption)
                             .foregroundStyle(.secondary)

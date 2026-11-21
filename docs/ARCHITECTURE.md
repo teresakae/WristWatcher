@@ -7,14 +7,14 @@ builds toward.
 
 ## 1. What the app is
 
-A watch app that classifies wrist posture in near-real-time and tells the
-wearer when it's wrong. Start a session, and the pipeline runs continuously
-until it's stopped:
+A watch app that classifies desk activity (typing / mouse / handwriting /
+rest) and totals the time per activity. No live feedback, no haptics. Start a
+session, and the pipeline runs continuously until it's stopped:
 
 ```
 CMDeviceMotion @ 100 Hz ──> sliding window ──> 36-feature vector
-        ──> Core ML binary classifier (neutral / non-neutral)
-        ──> debounce + cooldown ──> haptic on non-neutral
+        ──> Core ML 4-class classifier (typing / mouse / writing / rest)
+        ──> seconds per activity + segments
 ```
 
 At session end, a summary (not raw data) transfers to the iPhone companion for
@@ -51,8 +51,8 @@ Exact windowing (length, stride, per-channel statistics) is owned by
 
 ## 4. Haptic policy
 
-Debounce + cooldown, per [DECISIONS.md](DECISIONS.md) 2026-09-15. Constants not
-yet chosen. No haptic code in D0.
+None. Removed 2026-11-21 (see [DECISIONS.md](DECISIONS.md)); the app is a
+measuring instrument, not a reminder.
 
 ## 5. HKWorkoutSession
 
@@ -67,8 +67,8 @@ is dead for the collector.
 
 `transferUserInfo`, not `transferFile` — see
 [DECISIONS.md](DECISIONS.md) 2026-09-15 for why this diverges from the
-thesis's alignment matrix. The payload is a session summary: class counts,
-total non-neutral duration, start/end timestamps, `measured_hz`. No raw
+thesis's alignment matrix. The payload is a session summary: seconds per
+activity, segments, start/end timestamps, `measured_hz`. No raw
 channels, no feature vectors — this app does not export data the way the
 collector does.
 
@@ -90,7 +90,6 @@ already queues and retries.
 | `SessionEngine.swift` | watch | start/stop state, `HKWorkoutSession` |
 | `MotionPipeline.swift` | watch | `CMDeviceMotion` @ 100 Hz, sliding window, feature vector |
 | `Classifier.swift` | watch | Core ML model load + forward pass |
-| `HapticPolicy.swift` | watch | debounce + cooldown |
 | `Transfer.swift` | watch | `WCSession`, summary push |
 | `ContentView.swift` | watch | session UI |
 | `PhoneApp.swift` | iOS | entry + session history list |

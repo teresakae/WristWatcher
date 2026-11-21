@@ -6,6 +6,29 @@ then here as a re-derivation, not as the original decision.
 
 ---
 
+## 2026-11-21 — Iteration 3: activity-minutes app; anchor and posture code removed
+
+**`FEATURE-CONTRACT.md` §5 changed: the gravity anchor is removed.** The model
+is the four-class `logreg.mlmodel` (typing / mouse / writing / rest), trained
+on raw gravity; the posture-era anchor subtraction would shift its inputs
+without any error. `Enrollment`, `EnrollmentView`, `.enrolling` state and
+`MotionSampler.sampleFilter` are deleted; Start goes straight to running.
+
+**Posture-era code removed:** `HapticController`, `PostureClassifier`,
+`CoreMLPostureClassifier`, their tests, the alert badge. `ship_logreg_binary.mlmodel`
+is no longer referenced (file kept, git-ignored). No haptics, no live feedback.
+
+**`SessionSummary` schema 2:** seconds per activity (one window = one second;
+the first second of a session is unclassified) plus segments, `endedBySystem`.
+Old posture summaries are not migrated. A session ended by the system (workout
+session ended without Stop) finishes once, flagged `endedBySystem`.
+
+**Replay mode:** Xcode scheme launch argument `-replayScript typing*30,mouse*20,rest*10`
+makes a scripted classifier return one label per window, for the black-box
+tests of Chapter 3. No settings screen, no visible toggle.
+
+---
+
 ## 2026-11-20 — Latency harness also an in-app Release screen
 
 The Core ML latency harness (`HarnessLatencyTests`) is also available as a

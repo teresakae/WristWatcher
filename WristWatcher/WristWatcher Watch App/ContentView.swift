@@ -16,8 +16,6 @@ struct ContentView: View {
         switch engine.state {
         case .idle:
             IdleView(engine: engine)
-        case .enrolling:
-            EnrollmentView(engine: engine)
         case .running:
             RunningView(engine: engine)
         case .finished:

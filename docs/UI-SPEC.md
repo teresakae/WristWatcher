@@ -27,22 +27,18 @@ the whole session. Consequences, all implemented in `RunningView`:
 
 | Screen | Content |
 |---|---|
-| `IdleView` | "Ready" status. Full-width `.borderedProminent` Start, `.handGestureShortcut(.primaryAction)` — Start only, never Stop. Blocked state (motion unavailable / HealthKit denied / no companion): disabled control + one sentence naming the cause, from `SessionEngine.blockedReason`. Optional relative last-session date. `#if DEBUG` gate-driver toggle, de-emphasized, below Start — scaffolding, not a settings screen. |
-| `RunningView`, bright | Elapsed, largest element, `.monospacedDigit()`. Alert count, secondary, with an SF Symbol. Stop, `.bordered` + `.tint(.red)` — not prominent, since the app doesn't want the session stopped. |
-| `RunningView`, dimmed | Minutes only. Stop hidden. Alert count stays. |
-| `SummaryView` | Duration, windows classified, non-neutral fraction, alerts fired, transfer state (`Waiting to send` / `Sent to iPhone` / `Couldn't send` — never implies arrival before it's confirmed). Measured Hz moved here as a de-emphasized recording-detail row — it's a gate readout, not product UI. Done returns to idle via `SessionEngine.dismissSummary()`. |
+| `IdleView` | "Ready" status. Full-width `.borderedProminent` Start, `.handGestureShortcut(.primaryAction)` — Start only, never Stop. Blocked state (motion unavailable / HealthKit denied / no companion): disabled control + one sentence naming the cause, from `SessionEngine.blockedReason`. Optional relative last-session date. |
+| `RunningView`, bright | Elapsed, largest element, `.monospacedDigit()`. `#if DEBUG` raw sample count, tertiary. No label, no counts. Stop, `.bordered` + `.tint(.red)` — not prominent, since the app doesn't want the session stopped. |
+| `RunningView`, dimmed | Minutes only. Stop hidden. |
+| `SummaryView` | "Ended by system" line when flagged, duration, time and percent of classified time per activity ("No data" when nothing was classified), transfer state (`Waiting to send` / `Sent to iPhone` / `Couldn't send` — never implies arrival before it's confirmed). Measured Hz moved here as a de-emphasized recording-detail row — it's a gate readout, not product UI. Done returns to idle via `SessionEngine.dismissSummary()`. |
 
-Not present, each already settled in the design (§2.2): live posture class,
+Not present, each already settled in the design (§2.2): live activity label,
 chart, sparkline, progress ring.
 
-### 2.1 Haptic vocabulary — partially implemented
+### 2.1 Haptics
 
-The design's §2.5 names three cues: session-started, posture alert,
-session-ended. Only the middle one exists in code (`HapticController`'s
-`.notification`, per `HapticPolicy`'s debounce + cooldown). The start/stop
-bookend cues are documented intent, not wired — they weren't in this pass's
-scope (view rendering + the four `SessionEngine`/`Transfer` prerequisites),
-so they're noted here as a gap rather than added quietly.
+None. The posture-era alert cue and its `HapticController` were removed
+2026-11-21 (DECISIONS.md). Times read "59 s" below a minute, "1 min 0 s" from 60 s.
 
 ## 3. iOS — screen inventory
 
@@ -51,11 +47,11 @@ so they're noted here as a gap rather than added quietly.
 
 | Screen | Content |
 |---|---|
-| List | One row per summary: date + duration leading, non-neutral fraction (the one number a row scanned at arm's length supports) trailing. `ContentUnavailableView` when empty — native empty-state layout, one sentence that sessions appear after finishing on the watch. No pull-to-refresh; delivery is push-based. Title "Sessions", large. |
-| Detail | `List`, `.insetGrouped`, four sections, every row `LabeledContent`. Session (started/ended/duration). Posture (windows classified, non-neutral count + fraction, alerts fired, windows refused). Recording (measured Hz, model identifier, app version). Diagnostics — present only when `invalidationReason` is non-nil. Title inline, the session's date/time. |
+| List | One row per stored session (SwiftData, newest first): date + duration leading, with an "Ended by system" tag when flagged; dominant activity ("No data" if none) trailing. `ContentUnavailableView` when empty — native empty-state layout, one sentence that sessions appear after finishing on the watch. No pull-to-refresh; delivery is push-based. Title "Sessions", large. |
+| Detail | `List`, `.insetGrouped`, every row `LabeledContent`. Session (started/ended/duration, ended by system). Activity (time and percent per activity). Timeline (Swift Charts, one `BarMark` per segment, coloured by activity; only when segments exist). Recording (measured Hz, model identifier, app version). Diagnostics — present only when `invalidationReason` is non-nil. Title inline, the session's date/time. |
 
-`Receiver.summaries` is newest-first by construction (`add()` inserts at
-index 0) — checked, not assumed.
+The list is a SwiftData `@Query` sorted by `startedAt`, newest first. A session
+re-delivered with the same `sessionId` replaces its row (`StoredSession.upsert`).
 
 ## 4. Accessibility
 
@@ -73,5 +69,5 @@ index 0) — checked, not assumed.
 
 Charts or plots on the watch · a settings screen on either target · a
 progress ring · live posture class · any phone control that affects the
-watch · a delete affordance · pull-to-refresh · custom materials or
+watch · pull-to-refresh · custom materials or
 hand-built glass · a launch screen animation.
