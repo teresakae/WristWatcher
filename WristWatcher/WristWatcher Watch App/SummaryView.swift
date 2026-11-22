@@ -15,6 +15,7 @@ import SwiftUI
 
 struct SummaryView: View {
     var engine: SessionEngine
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ScrollView {
@@ -40,6 +41,14 @@ struct SummaryView: View {
                     }
 
                     SummaryRow(label: "Transfer", value: transferText)
+                    if engine.transferState == .failed {
+                        if let error = engine.transferError {
+                            Text(error)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Button("Send again") { engine.retryTransfer() }
+                    }
                     SummaryRow(label: "Measured rate", value: "\(String(format: "%.0f", summary.sampleRateHz)) Hz")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -49,6 +58,9 @@ struct SummaryView: View {
                     .buttonStyle(.borderedProminent)
             }
             .padding()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { engine.retryTransfer() }
         }
     }
 

@@ -41,6 +41,8 @@ final class SessionEngine {
     var measuredHz: Double { sampler.measuredHz }
     var sampleCount: Int { sampler.sampleCount }
     var transferState: Transfer.TransferState { transfer.state }
+    var transferError: String? { transfer.lastError }
+    func retryTransfer() { transfer.retry() }
 
     /// Why Start is disabled on IdleView, or nil when nothing blocks it.
     /// Fresh HKHealthStore/CMMotionManager instances: these are capability

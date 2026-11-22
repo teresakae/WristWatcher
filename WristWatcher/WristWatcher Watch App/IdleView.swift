@@ -38,7 +38,7 @@ struct IdleView: View {
                     }
 
                     if let last = engine.lastSummary {
-                        Text(last.startedAt, style: .relative)
+                        Text("Last: \(last.startedAt.formatted(date: .omitted, time: .shortened))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
