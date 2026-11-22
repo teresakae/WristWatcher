@@ -36,9 +36,11 @@ final class CoreMLActivityClassifier: ActivityClassifier {
         self.model = model
 
         let metadata = model.modelDescription.metadata
-        modelIdentifier = (metadata[.versionString] as? String)
-            ?? (metadata[.description] as? String)
-            ?? resourceName
+        // coremltools writes these keys as "" when unset, so skip empties.
+        let named = [metadata[.versionString], metadata[.description]]
+            .compactMap { $0 as? String }
+            .first { !$0.isEmpty }
+        modelIdentifier = named ?? resourceName
     }
 
     func classify(_ features: [Double]) -> Activity? {

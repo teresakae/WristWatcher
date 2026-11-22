@@ -16,6 +16,19 @@ struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \StoredSession.startedAt, order: .reverse) private var sessions: [StoredSession]
 
+    /// All sessions as one JSON file for the share sheet; nil when there are none.
+    // ponytail: rewritten on every render; fine for a few dozen sessions, cache if the list grows large.
+    private var exportURL: URL? {
+        let all = sessions.compactMap(\.summary)
+        guard !all.isEmpty else { return nil }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("sessions.json")
+        guard let data = try? encoder.encode(all), (try? data.write(to: url)) != nil else { return nil }
+        return url
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -49,6 +62,11 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Sessions")
+            .toolbar {
+                if let url = exportURL {
+                    ToolbarItem(placement: .topBarTrailing) { ShareLink(item: url) }
+                }
+            }
             .navigationDestination(for: SessionSummary.self) { summary in
                 SessionDetailView(summary: summary)
             }
